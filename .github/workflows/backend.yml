@@ -114,11 +114,11 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Railway Deploy Hook
+      - name: Trigger Render Deploy Hook
         run: |
-          if [ -z "${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}" ]; then
-            echo "⚠️ RAILWAY_DEPLOY_HOOK_URL secret is not configured. Skipping deploy trigger."
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "⚠️ RENDER_DEPLOY_HOOK_URL secret is not configured. Skipping deploy trigger."
             exit 0
           fi
-          echo "🚀 Triggering Railway deploy webhook..."
-          curl -s -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}" || echo "Webhook trigger completed with notice"
+          echo "🚀 Triggering Render deploy webhook..."
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" || echo "Webhook trigger completed with notice"

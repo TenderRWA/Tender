@@ -144,7 +144,7 @@ bun test
 - **Frontend**: React 19, Vite, TanStack Query, Tailwind CSS, Lucide React
 - **Backend**: TypeScript, Bun, Express, PostgreSQL (`pg`)
 - **Blockchain**: Solana (`@solana/web3.js`), Jupiter Aggregator V6 API, Token-2022
-- **Deployment**: Vercel (Frontend), Railway / Docker (Backend)
+- **Deployment**: Vercel (Frontend), Render / Docker (Backend)
 - **CI/CD**: GitHub Actions (Test, GHCR Build, Semantic Release, Deploy Hook)
 
 ---
