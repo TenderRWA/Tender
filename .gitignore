@@ -21,11 +21,13 @@ out/
 .vinxi/
 .wrangler/
 
-# Logs & temp
+# Logs & temp & keys
 *.log
 .DS_Store
 *.pem
 .vercel
+*wallet.json
+cockpit/wallet.json
 
 # Testing & Caches
 coverage/
