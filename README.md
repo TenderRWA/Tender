@@ -80,9 +80,9 @@ Sender (SOL / USDC / SPL)
 
 ## API Endpoints & Deployment
 
-* **Live Production Backend**: `https://tender-api-jpw2.onrender.com`
+* **Live Production Backend**: `https://api.tenderrwa.com` (Direct host: `https://tender-api-jpw2.onrender.com`)
 * **Hosting Tier**: Paid Render instance (Always-on, persistent, zero sleep / no cold starts)
-* **Health Check**: `https://tender-api-jpw2.onrender.com/health`
+* **Health Check**: `https://api.tenderrwa.com/health`
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |

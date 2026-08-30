@@ -1,6 +1,10 @@
 import express from "express";
 import cors from "cors";
 import { healthRouter } from "./routes/health";
+import { assetsRouter } from "./routes/assets";
+import { handlesRouter } from "./routes/handles";
+import { settleRouter } from "./routes/settle";
+import { invoicesRouter } from "./routes/invoices";
 
 export const app = express();
 
@@ -13,14 +17,30 @@ app.get("/", (_req, res) => {
     name: "TENDER API",
     status: "ok",
     version: "0.1.0",
-    docs: "/health",
+    description: "Receive-side RWA Settlement Rail on Solana",
+    endpoints: {
+      health: "/health",
+      assets: "/api/v1/assets",
+      handles: "/api/v1/handles/:handle",
+      settleQuote: "POST /api/v1/settle/quote",
+      electionQuote: "POST /api/v1/settle/election-quote",
+      buildTx: "POST /api/v1/settle/build-tx",
+      invoices: "/api/v1/invoices",
+    },
   });
 });
 
-// Health check routes
+// Health routes
 app.use("/health", healthRouter);
 app.use("/api/health", healthRouter);
 app.use("/api/v1/health", healthRouter);
+
+// API v1 routes
+app.use("/api/v1/assets", assetsRouter);
+app.use("/api/v1/handles", handlesRouter);
+app.use("/api/v1/settle", settleRouter);
+app.use("/api/v1/invoices", invoicesRouter);
+app.use("/api/v1/solana-pay", invoicesRouter);
 
 // Fallback 404 handler
 app.use((_req, res) => {
