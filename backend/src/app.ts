@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { healthRouter } from "./routes/health";
 import { assetsRouter } from "./routes/assets";
@@ -10,6 +10,25 @@ export const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Request logging middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = performance.now();
+  const timestamp = new Date().toISOString();
+  const method = req.method;
+  const url = req.originalUrl || req.url;
+
+  res.on("finish", () => {
+    const duration = (performance.now() - start).toFixed(2);
+    const status = res.statusCode;
+    const statusEmoji = status >= 500 ? "❌" : status >= 400 ? "⚠️" : "✅";
+    console.log(
+      `[${timestamp}] ${statusEmoji} ${method} ${url} -> ${status} (${duration}ms)`
+    );
+  });
+
+  next();
+});
 
 // Root welcome route
 app.get("/", (_req, res) => {
