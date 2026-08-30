@@ -3,13 +3,16 @@ import pg from "pg";
 const { Pool } = pg;
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || undefined,
   ssl:
     process.env.NODE_ENV === "production"
       ? { rejectUnauthorized: false }
       : false,
 });
 
-export const query = (text: string, params?: unknown[]) => {
+export const query = async (text: string, params?: unknown[]) => {
+  if (!process.env.DATABASE_URL) {
+    return { rows: [], rowCount: 0 };
+  }
   return pool.query(text, params);
 };

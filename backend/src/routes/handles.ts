@@ -70,13 +70,6 @@ handlesRouter.post("/register", async (req: Request, res: Response) => {
 
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "").trim();
 
-    // Check availability
-    const existing = await query("SELECT handle FROM handles WHERE handle = $1", [normalizedHandle]);
-    if (existing.rows.length > 0) {
-      res.status(409).json({ error: `Handle '@${normalizedHandle}' is already registered` });
-      return;
-    }
-
     // Default to 100% USDC if no election provided
     const targetElections = elections && elections.length > 0
       ? elections
@@ -85,6 +78,13 @@ handlesRouter.post("/register", async (req: Request, res: Response) => {
     const totalBps = targetElections.reduce((sum, e) => sum + e.basisPoints, 0);
     if (totalBps !== 10000) {
       res.status(400).json({ error: `Total basis points must equal 10000 (100%). Received: ${totalBps}` });
+      return;
+    }
+
+    // Check availability
+    const existing = await query("SELECT handle FROM handles WHERE handle = $1", [normalizedHandle]);
+    if (existing.rows.length > 0) {
+      res.status(409).json({ error: `Handle '@${normalizedHandle}' is already registered` });
       return;
     }
 
@@ -129,6 +129,14 @@ handlesRouter.put("/:handle/elections", async (req: Request, res: Response) => {
       return;
     }
 
+    const totalBps = elections.reduce((sum, e) => sum + e.basisPoints, 0);
+    if (totalBps !== 10000) {
+      res.status(400).json({
+        error: `Total basis points across active elections must sum to exactly 10000 (100%). Received: ${totalBps}`,
+      });
+      return;
+    }
+
     // Verify handle existence
     const handleResult = await query("SELECT handle, owner_wallet FROM handles WHERE handle = $1", [handle]);
     if (handleResult.rows.length === 0) {
@@ -138,14 +146,6 @@ handlesRouter.put("/:handle/elections", async (req: Request, res: Response) => {
 
     if (ownerWallet && handleResult.rows[0].owner_wallet !== ownerWallet) {
       res.status(403).json({ error: "Unauthorized: wallet address does not own this handle" });
-      return;
-    }
-
-    const totalBps = elections.reduce((sum, e) => sum + e.basisPoints, 0);
-    if (totalBps !== 10000) {
-      res.status(400).json({
-        error: `Total basis points across active elections must sum to exactly 10000 (100%). Received: ${totalBps}`,
-      });
       return;
     }
 
