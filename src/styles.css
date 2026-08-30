@@ -1,0 +1,367 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+/*
+ * TENDER design system (light theme).
+ * All colors live here as tokens; components use semantic utilities only.
+ */
+
+@theme {
+  /* Brand surfaces */
+  --color-base: #ffffff;
+  --color-card2: #f4f4f5;
+  --color-raised: #ececee;
+  --color-hairline: #e3e3e6;
+
+  /* Brand red */
+  --color-red: #e8322a;
+  --color-red-hover: #d42a22;
+  --color-red-deep: #b3251e;
+
+  /* Dark void behind the WebGL hero scene (matches scene fog colour). */
+  --color-scene-void: #05060a;
+
+  /* Ink + greys */
+  --color-ink: #101012;
+  --color-secondary2: #55555c;
+  --color-muted2: #9a9aa0;
+  --color-greyseries: #c9c9ce;
+  --color-success: #3ecf8e;
+  --color-warning: #f5a524;
+
+  /* shadcn semantic tokens */
+  --color-background: #ffffff;
+  --color-foreground: #101012;
+  --color-card: #f4f4f5;
+  --color-card-foreground: #101012;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #101012;
+  --color-primary: #e8322a;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f4f4f5;
+  --color-secondary-foreground: #101012;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #55555c;
+  --color-accent: #ececee;
+  --color-accent-foreground: #101012;
+  --color-destructive: #e8322a;
+  --color-destructive-foreground: #fafafa;
+  --color-border: #e3e3e6;
+  --color-input: #e3e3e6;
+  --color-ring: #e8322a;
+  --color-ring-offset-background: #ffffff;
+  --color-chart-1: #e8322a;
+  --color-chart-2: #55555c;
+  --color-chart-3: #9a9aa0;
+  --color-chart-4: #3ecf8e;
+  --color-chart-5: #f5a524;
+  --color-sidebar: #ffffff;
+  --color-sidebar-foreground: #101012;
+  --color-sidebar-primary: #e8322a;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #f4f4f5;
+  --color-sidebar-accent-foreground: #101012;
+  --color-sidebar-border: #e3e3e6;
+  --color-sidebar-ring: #e8322a;
+
+  /* Radii — reference is nearly square-cornered */
+  --radius: 0.25rem;
+  --radius-xs: calc(var(--radius) - 6px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Typography */
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* Layout */
+  --container-container: 1440px;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  /* Motion */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-spin-slow: spin-slow 20s linear infinite;
+  --animate-bob: bob 1.8s ease-in-out infinite;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes caret-blink {
+    0%,
+    70%,
+    100% {
+      opacity: 1;
+    }
+    20%,
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes spin-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(8px);
+    }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    scroll-behavior: auto; /* Lenis owns scrolling */
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    font-size: 17px;
+    line-height: 1.65;
+  }
+  ::selection {
+    background: var(--color-red);
+    color: #ffffff;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-base);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-hairline);
+    border-radius: 0;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-red);
+  }
+}
+
+@utility dot-matrix {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.28) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+@utility dot-matrix-dark {
+  background-image: radial-gradient(circle, #e3e3e6 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+/* Lenis recommended styles */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* Mobile safety: no accidental horizontal scroll from marquees, parallax
+   offsets or oversized display type. `clip` keeps position: sticky working. */
+body {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   Dashboard glass system
+   Frosted premium surfaces used across the TENDER terminal. Standard
+   backdrop-filter only — the build adds vendor prefixes.
+--------------------------------------------------------------------------- */
+.dash-aurora {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+}
+.dash-aurora::before {
+  content: "";
+  position: absolute;
+  inset: -10% -5% auto -5%;
+  height: 720px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38rem 26rem at 12% 0%, color-mix(in oklab, var(--color-red) 20%, transparent), transparent 70%),
+    radial-gradient(34rem 24rem at 88% 12%, color-mix(in oklab, var(--color-ink) 12%, transparent), transparent 72%),
+    radial-gradient(28rem 20rem at 50% 40%, color-mix(in oklab, var(--color-red) 9%, transparent), transparent 75%);
+  filter: blur(6px);
+  opacity: 0.85;
+}
+
+.glass {
+  background: color-mix(in oklab, var(--color-base) 62%, transparent);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid color-mix(in oklab, var(--color-ink) 8%, transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, var(--color-base) 80%, transparent) inset,
+    0 18px 40px -24px color-mix(in oklab, var(--color-ink) 40%, transparent);
+}
+
+.glass-soft {
+  background: color-mix(in oklab, var(--color-base) 45%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--color-ink) 7%, transparent);
+}
+
+.glass-interactive {
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+}
+.glass-interactive:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--color-red) 38%, transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, var(--color-base) 85%, transparent) inset,
+    0 26px 55px -26px color-mix(in oklab, var(--color-red) 45%, transparent);
+}
+
+/* Cursor-tracked sheen used on glass stat cards. */
+.glass-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  background: radial-gradient(
+    16rem 16rem at var(--mx, 50%) var(--my, 0%),
+    color-mix(in oklab, var(--color-red) 22%, transparent),
+    transparent 65%
+  );
+}
+.glass-sheen:hover::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-interactive:hover {
+    transform: none;
+  }
+}
+
+/* ===== Evolve hero: fonts, tokens and gradient frame ===== */
+
+@font-face {
+  font-family: "Hero Sans";
+  src: url("/__l5e/assets-v1/4f60ffce-c24d-47bf-8fea-eebb8602db3a/InterTight-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hero Sans";
+  src: url("/__l5e/assets-v1/6ea5d40d-ec5a-4a9d-bc83-b68e66899d3b/InterTight-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hero Mono";
+  src: url("/__l5e/assets-v1/8d29bae6-f58c-4ed5-b111-ab4ee3461206/SpaceMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Red ramp shared by the hero CTA frame, its label and its chevrons. */
+  --accent-start: #ff5040;
+  --accent-middle: #e8322a;
+  --accent-end: #a1241c;
+  --gradient-accent: linear-gradient(
+    90deg,
+    var(--accent-start) 0%,
+    var(--accent-middle) 45%,
+    var(--accent-end) 100%
+  );
+
+  /* Point-cloud light rig (read by the hero scene). */
+  --background: #ffffff;
+  --scene-key: #e8322a;
+  --scene-rim: #8f8f8f;
+  --scene-fill: #3a3a3a;
+}
+
+@utility font-hero {
+  font-family: "Hero Sans", "Inter", system-ui, sans-serif;
+}
+
+@utility font-hero-mono {
+  font-family: "Hero Mono", ui-monospace, monospace;
+}
+
+/* Hairline gradient border, masked so only the frame shows. */
+.gradient-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  background: var(--gradient-accent);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}

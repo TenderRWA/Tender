@@ -10,11 +10,16 @@ node_modules/
 bun.lockb
 bun.lock
 
-# Build outputs
+# Build outputs & TanStack Start / Nitro
 dist/
 build/
 .next/
 out/
+.nitro/
+.output/
+.tanstack-start/
+.vinxi/
+.wrangler/
 
 # Logs & temp
 *.log
