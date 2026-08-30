@@ -46,7 +46,7 @@ export async function fetchJupiterQuote(params: JupiterQuoteParams): Promise<Jup
   const outputMint = normalizeMintForJupiter(params.outputMint);
   const slippageBps = params.slippageBps ?? 50;
 
-  const url = new URL("https://api.jup.ag/swap/v6/quote");
+  const url = new URL("https://api.jup.ag/swap/v1/quote");
   url.searchParams.set("inputMint", inputMint);
   url.searchParams.set("outputMint", outputMint);
   url.searchParams.set("amount", String(params.amount));
@@ -101,7 +101,7 @@ export async function fetchJupiterSwapInstructions(params: {
     prioritizationFeeLamports: "auto",
   };
 
-  const res = await fetch("https://api.jup.ag/swap/v6/swap-instructions", {
+  const res = await fetch("https://api.jup.ag/swap/v1/swap-instructions", {
     method: "POST",
     headers,
     body: JSON.stringify(body),

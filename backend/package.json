@@ -7,7 +7,8 @@
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "check": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "cockpit": "bun run cockpit/runCockpit.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.12",

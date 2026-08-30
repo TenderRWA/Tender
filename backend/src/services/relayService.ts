@@ -98,7 +98,7 @@ export async function fetchRelayQuote(params: RelayGetQuoteParams): Promise<Rela
     body.slippageTolerance = String(params.slippageToleranceBps);
   }
 
-  if (params.feeRecipient && params.feeBps) {
+  if (params.feeRecipient && params.feeRecipient.startsWith("0x") && params.feeBps) {
     body.appFees = [
       {
         recipient: params.feeRecipient,
