@@ -564,6 +564,11 @@ export const ParticleScene = ({
 
     const build = async () => {
       const response = await fetch(src, { signal });
+      // A miss is served the SPA shell, not a 404 body — without this the
+      // failure surfaces as an opaque JSON parse error on an empty hero.
+      if (!response.ok) {
+        throw new Error(`${src} → ${response.status} ${response.statusText}`);
+      }
       const payload: { objects: Record<string, { verts: number[] }> } =
         await response.json();
       if (disposed) return;

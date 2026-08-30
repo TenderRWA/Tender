@@ -1,48 +1,27 @@
-import { useEffect, useRef, useState } from "react";
-import wavesVideo from "@/assets/waves.mp4.asset.json";
-import wavesPoster from "@/assets/waves-poster.jpg.asset.json";
-
 /**
- * Site-wide ambient background: the looping "glass waves" film, hue-shifted
- * from its original lime into the TENDER red / white palette and held at a low
- * opacity so it blends under every page without fighting the content.
+ * Site-wide ambient background.
+ *
+ * This was a looping "glass waves" film. It was pulled: motion behind live
+ * figures competed with them for attention, and it cost a 27 MB video on every
+ * route that used it. What stays is the still ground the film sat under — a
+ * near-white wash with a faint red bloom, so pages are not stark white.
+ *
+ * Static by design: no video, no image, no timers. Purely painted.
  */
 export default function SiteBackground() {
-  const [mounted, setMounted] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const play = () => {
-      void v.play().catch(() => {});
-    };
-    play();
-    document.addEventListener("visibilitychange", play);
-    return () => document.removeEventListener("visibilitychange", play);
-  }, [mounted]);
-
   return (
-    <div aria-hidden="true" className="fixed inset-0 z-0 overflow-hidden bg-base pointer-events-none">
-      {mounted ? (
-        <video
-          ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover opacity-[0.34] [filter:hue-rotate(291deg)_saturate(1.5)_contrast(1.05)] motion-reduce:hidden"
-          src={wavesVideo.url}
-          poster={wavesPoster.url}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-        />
-      ) : null}
-      {/* Soft white wash so text keeps full contrast over the film. */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.72),rgba(255,255,255,0.6)_45%,rgba(255,255,255,0.74))]" />
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-base"
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(60rem 40rem at 15% -10%, color-mix(in oklab, var(--color-red) 7%, transparent), transparent 70%)," +
+            "radial-gradient(50rem 36rem at 90% 5%, color-mix(in oklab, var(--color-ink) 5%, transparent), transparent 72%)",
+        }}
+      />
     </div>
   );
 }

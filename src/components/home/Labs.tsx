@@ -1,10 +1,12 @@
-import labsVideo from "@/assets/labs2.mp4.asset.json";
 import { useEffect, useRef } from "react";
 import SectionMarker from "@/components/SectionMarker";
 import { gsap, ScrollTrigger, prefersReducedMotion } from "@/hooks/useSectionReveal";
 import { useComingSoon } from "@/components/ComingSoonModal";
 
 gsap.registerPlugin(ScrollTrigger);
+
+/** Served from `public/` — see the note in `SiteBackground`. */
+const LABS_VIDEO_SRC = "/labs2.mp4";
 
 const MILESTONES = [
   { t: "T1", desc: "Handle elections + pay-by-handle settlement." },
@@ -95,7 +97,7 @@ export default function Labs() {
         {/* Roadmap tile */}
         <div data-reveal className="mt-12 bg-card2 border border-hairline rounded overflow-hidden">
           <video
-            src={labsVideo.url}
+            src={LABS_VIDEO_SRC}
             autoPlay
             loop
             muted

@@ -21,8 +21,6 @@ import { Route as DashboardClaimRouteImport } from './routes/dashboard.claim'
 import { Route as DashboardElectionsRouteImport } from './routes/dashboard.elections'
 import { Route as DashboardInvoicesRouteImport } from './routes/dashboard.invoices'
 import { Route as DashboardPaymentsRouteImport } from './routes/dashboard.payments'
-import { Route as DashboardPayrollRouteImport } from './routes/dashboard.payroll'
-import { Route as DashboardStakingRouteImport } from './routes/dashboard.staking'
 import { Route as DashboardUniverseRouteImport } from './routes/dashboard.universe'
 
 const IndexRoute = IndexRouteImport.update({
@@ -85,16 +83,6 @@ const DashboardPaymentsRoute = DashboardPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => DashboardRoute,
 } as any)
-const DashboardPayrollRoute = DashboardPayrollRouteImport.update({
-  id: '/payroll',
-  path: '/payroll',
-  getParentRoute: () => DashboardRoute,
-} as any)
-const DashboardStakingRoute = DashboardStakingRouteImport.update({
-  id: '/staking',
-  path: '/staking',
-  getParentRoute: () => DashboardRoute,
-} as any)
 const DashboardUniverseRoute = DashboardUniverseRouteImport.update({
   id: '/universe',
   path: '/universe',
@@ -113,8 +101,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
-  '/dashboard/payroll': typeof DashboardPayrollRoute
-  '/dashboard/staking': typeof DashboardStakingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
@@ -129,8 +115,6 @@ export interface FileRoutesByTo {
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
-  '/dashboard/payroll': typeof DashboardPayrollRoute
-  '/dashboard/staking': typeof DashboardStakingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/dashboard': typeof DashboardIndexRoute
 }
@@ -147,8 +131,6 @@ export interface FileRoutesById {
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
-  '/dashboard/payroll': typeof DashboardPayrollRoute
-  '/dashboard/staking': typeof DashboardStakingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
@@ -166,8 +148,6 @@ export interface FileRouteTypes {
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
-    | '/dashboard/payroll'
-    | '/dashboard/staking'
     | '/dashboard/universe'
     | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
@@ -182,8 +162,6 @@ export interface FileRouteTypes {
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
-    | '/dashboard/payroll'
-    | '/dashboard/staking'
     | '/dashboard/universe'
     | '/dashboard'
   id:
@@ -199,8 +177,6 @@ export interface FileRouteTypes {
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
-    | '/dashboard/payroll'
-    | '/dashboard/staking'
     | '/dashboard/universe'
     | '/dashboard/'
   fileRoutesById: FileRoutesById
@@ -301,20 +277,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPaymentsRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/dashboard/payroll': {
-      id: '/dashboard/payroll'
-      path: '/payroll'
-      fullPath: '/dashboard/payroll'
-      preLoaderRoute: typeof DashboardPayrollRouteImport
-      parentRoute: typeof DashboardRoute
-    }
-    '/dashboard/staking': {
-      id: '/dashboard/staking'
-      path: '/staking'
-      fullPath: '/dashboard/staking'
-      preLoaderRoute: typeof DashboardStakingRouteImport
-      parentRoute: typeof DashboardRoute
-    }
     '/dashboard/universe': {
       id: '/dashboard/universe'
       path: '/universe'
@@ -330,8 +292,6 @@ interface DashboardRouteChildren {
   DashboardElectionsRoute: typeof DashboardElectionsRoute
   DashboardInvoicesRoute: typeof DashboardInvoicesRoute
   DashboardPaymentsRoute: typeof DashboardPaymentsRoute
-  DashboardPayrollRoute: typeof DashboardPayrollRoute
-  DashboardStakingRoute: typeof DashboardStakingRoute
   DashboardUniverseRoute: typeof DashboardUniverseRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
@@ -341,8 +301,6 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardElectionsRoute: DashboardElectionsRoute,
   DashboardInvoicesRoute: DashboardInvoicesRoute,
   DashboardPaymentsRoute: DashboardPaymentsRoute,
-  DashboardPayrollRoute: DashboardPayrollRoute,
-  DashboardStakingRoute: DashboardStakingRoute,
   DashboardUniverseRoute: DashboardUniverseRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }

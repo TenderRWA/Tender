@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import wavesVideo from "@/assets/waves.mp4.asset.json";
-import wavesPoster from "@/assets/waves-poster.jpg.asset.json";
+
+/** Served from `public/` — see the note in `SiteBackground`. */
+const WAVES_VIDEO_SRC = "/waves.mp4";
+const WAVES_POSTER_SRC = "/waves-poster.jpg";
 
 const HeadParticles = lazy(() =>
   import("./HeadParticles").then((m) => ({ default: m.HeadParticles }))
@@ -33,8 +35,8 @@ export default function HeroHeadScene() {
       {mounted ? (
         <video
           className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.1] mix-blend-multiply blur-[1px] [filter:hue-rotate(291deg)_saturate(1.5)_contrast(1.05)] [mask-image:linear-gradient(to_bottom,#000_0%,#000_62%,transparent_100%)] motion-reduce:hidden"
-          src={wavesVideo.url}
-          poster={wavesPoster.url}
+          src={WAVES_VIDEO_SRC}
+          poster={WAVES_POSTER_SRC}
           autoPlay
           muted
           loop

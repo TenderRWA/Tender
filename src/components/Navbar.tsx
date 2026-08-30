@@ -3,18 +3,13 @@ import { Link, useLocation, useNavigate } from "@/lib/router-compat";
 import { AnimatePresence, motion } from "framer-motion";
 import { scrollToHash } from "@/lib/lenis";
 import { useComingSoon } from "@/components/ComingSoonModal";
+import TerminalControls from "@/components/dashboard/TerminalControls";
 
 const NAV_LINKS: { label: string; to: string }[] = [
   { label: "Home", to: "/#top" },
   { label: "Work", to: "/work" },
   { label: "Services", to: "/services" },
-  { label: "Process", to: "/#process" },
-  { label: "Smart Analytics", to: "/#analytics" },
   { label: "Pricing", to: "/pricing" },
-  { label: "FAQ", to: "/#faq" },
-  { label: "The Team", to: "/team" },
-  { label: "Design Laws", to: "/#laws" },
-  { label: "Tender Labs®", to: "/#labs" },
   { label: "Dashboard", to: "/dashboard" },
   { label: "Contact", to: "/contact" },
 ];
@@ -42,6 +37,9 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const comingSoon = useComingSoon();
+  // The terminal carries its identity controls here rather than in a
+  // second bar of its own.
+  const isTerminal = location.pathname.startsWith("/dashboard");
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 50);
@@ -115,9 +113,13 @@ export default function Navbar() {
           </Link>
 
           <div className="flex items-center gap-6">
-            <span className="hidden md:block font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
-              SOLANA · MAINNET-BETA
-            </span>
+            {isTerminal ? (
+              <TerminalControls />
+            ) : (
+              <span className="hidden md:block font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+                SOLANA · MAINNET-BETA
+              </span>
+            )}
             <button
               onClick={() => setOpen((v) => !v)}
               aria-label={open ? "Close menu" : "Open menu"}

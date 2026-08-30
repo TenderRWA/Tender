@@ -241,18 +241,18 @@ body {
 }
 
 .glass {
-  background: color-mix(in oklab, var(--color-base) 62%, transparent);
-  backdrop-filter: blur(22px) saturate(160%);
-  border: 1px solid color-mix(in oklab, var(--color-ink) 8%, transparent);
+  background: color-mix(in oklab, var(--color-base) 84%, transparent);
+  backdrop-filter: blur(26px) saturate(150%);
+  border: 1px solid color-mix(in oklab, var(--color-ink) 12%, transparent);
   box-shadow:
     0 1px 0 0 color-mix(in oklab, var(--color-base) 80%, transparent) inset,
     0 18px 40px -24px color-mix(in oklab, var(--color-ink) 40%, transparent);
 }
 
 .glass-soft {
-  background: color-mix(in oklab, var(--color-base) 45%, transparent);
-  backdrop-filter: blur(16px) saturate(140%);
-  border: 1px solid color-mix(in oklab, var(--color-ink) 7%, transparent);
+  background: color-mix(in oklab, var(--color-base) 70%, transparent);
+  backdrop-filter: blur(20px) saturate(135%);
+  border: 1px solid color-mix(in oklab, var(--color-ink) 10%, transparent);
 }
 
 .glass-interactive {
@@ -299,7 +299,7 @@ body {
 
 @font-face {
   font-family: "Hero Sans";
-  src: url("/__l5e/assets-v1/4f60ffce-c24d-47bf-8fea-eebb8602db3a/InterTight-Regular.ttf") format("truetype");
+  src: url("/fonts/InterTight-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -307,7 +307,7 @@ body {
 
 @font-face {
   font-family: "Hero Sans";
-  src: url("/__l5e/assets-v1/6ea5d40d-ec5a-4a9d-bc83-b68e66899d3b/InterTight-Medium.ttf") format("truetype");
+  src: url("/fonts/InterTight-Medium.ttf") format("truetype");
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -315,7 +315,7 @@ body {
 
 @font-face {
   font-family: "Hero Mono";
-  src: url("/__l5e/assets-v1/8d29bae6-f58c-4ed5-b111-ab4ee3461206/SpaceMono-Regular.ttf") format("truetype");
+  src: url("/fonts/SpaceMono-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;

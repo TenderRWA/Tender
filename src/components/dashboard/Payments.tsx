@@ -1,29 +1,24 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+
 import ModulePage from "@/components/dashboard/ModulePage";
-import DashTable, { DashRow, DashCell, StatusPill, RECEIPT_TONE } from "@/components/dashboard/DashTable";
-import { RECEIPTS, PAY_TOKENS, formatUSD } from "@/components/dashboard/data";
-import type { ReceiptStatus } from "@/components/dashboard/data";
-
-const ELECTION = [
-  { asset: "SPYx", pct: 50 },
-  { asset: "GLDx", pct: 30 },
-  { asset: "USDC", pct: 20 },
-];
-
-const FEE_PCT = 0.004;
-
-type SendState = "idle" | "sending" | "sent";
-
-const FILTERS: { key: ReceiptStatus | "all"; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "optimal", label: "Optimal" },
-  { key: "stable", label: "Stable" },
-  { key: "issue", label: "Issues" },
-];
+import DashTable, { DashRow, DashCell, StatusPill } from "@/components/dashboard/DashTable";
+import { useAssets, useElectionQuote, useSettlePortfolio } from "@/hooks/useTender";
+import type { SettlementLegResult } from "@/hooks/useTender";
+import { useWallet } from "@/lib/wallet/wallet-context";
 
 const inputCls =
   "w-full glass-soft rounded-xl px-4 py-3 font-body text-sm text-foreground placeholder:text-muted2 focus:outline-none focus:border-red focus:ring-2 focus:ring-red/25 transition-all duration-150";
+
+/** Keeps the live quote from firing on every keystroke. */
+function useDebounced<T>(value: T, delay = 400): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
 
 /** Animated red check shown after a payment settles. */
 function SettledCheck() {
@@ -53,42 +48,61 @@ function SettledCheck() {
   );
 }
 
+interface SettlementRecord extends SettlementLegResult {
+  handle: string;
+  at: string;
+}
+
 export default function Payments() {
+  const { address: wallet } = useWallet();
+  const { data: assets } = useAssets({ featured: true });
+  const payTokens = (assets?.baseCurrencies ?? []).map((t) => t.symbol);
+
   const [handle, setHandle] = useState("");
-  const [token, setToken] = useState(PAY_TOKENS[0]);
+  const [token, setToken] = useState("USDC");
   const [amount, setAmount] = useState("1000");
-  const [sendState, setSendState] = useState<SendState>("idle");
-  const [filter, setFilter] = useState<ReceiptStatus | "all">("all");
+  const [log, setLog] = useState<SettlementRecord[]>([]);
+
+  const debouncedHandle = useDebounced(handle);
+  const debouncedAmount = useDebounced(amount);
+
+  const quote = useElectionQuote({
+    recipientHandle: debouncedHandle.trim().length > 1 ? debouncedHandle : undefined,
+    fromSymbolOrMint: token,
+    amountIn: debouncedAmount,
+    userWallet: wallet || undefined,
+  });
+
+  const settle = useSettlePortfolio();
 
   const parsed = Number(amount);
-  const valid = handle.trim().length > 1 && Number.isFinite(parsed) && parsed > 0;
-
-  const quote = useMemo(() => {
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    const fee = parsed * FEE_PCT;
-    const net = parsed - fee;
-    return {
-      fee,
-      net,
-      legs: ELECTION.map((e) => ({ ...e, amount: (net * e.pct) / 100 })),
-    };
-  }, [parsed]);
+  const ready = Boolean(quote.data) && Number.isFinite(parsed) && parsed > 0 && Boolean(wallet);
 
   const send = () => {
-    if (!valid || sendState !== "idle") return;
-    setSendState("sending");
-    window.setTimeout(() => setSendState("sent"), 1400);
-    window.setTimeout(() => setSendState("idle"), 4200);
+    if (!ready || !quote.data || settle.isPending) return;
+    if (!wallet) return;
+    settle.mutate(
+      { quote: quote.data, userWallet: wallet, recipientHandle: handle },
+      {
+        onSuccess: (result) => {
+          const at = new Date().toLocaleTimeString("en-US", { hour12: false });
+          setLog((prev) => [
+            ...result.legs.map((leg) => ({ ...leg, handle: handle.trim(), at })),
+            ...prev,
+          ]);
+        },
+      },
+    );
   };
 
-  const rows = filter === "all" ? RECEIPTS : RECEIPTS.filter((r) => r.status === filter);
+  const legs = quote.data?.portfolioResult.legs ?? [];
 
   return (
     <ModulePage
       index="02"
       label="PAYMENTS"
       title="Pay any handle."
-      blurb="Send USDC, SOL or TENDER to a handle. The rail swaps and routes into the receiver's election in a single transaction."
+      blurb="Send USDC, SOL or an SPL token to a handle. The rail dual-quotes Jupiter and Relay per leg and routes into the receiver's election."
     >
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         {/* Composer */}
@@ -97,21 +111,29 @@ export default function Payments() {
             PAY-BY-HANDLE COMPOSER
           </span>
           <label className="flex flex-col gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">RECIPIENT HANDLE</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+              RECIPIENT HANDLE
+            </span>
             <input
               value={handle}
               onChange={(e) => setHandle(e.target.value)}
-              placeholder="@mira.sol"
+              placeholder="@alex"
               className={inputCls}
               aria-label="Recipient handle"
             />
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">YOU SEND</span>
-              {/* Segmented token select */}
-              <div className="flex glass-soft rounded-xl overflow-hidden" role="radiogroup" aria-label="Token to send">
-                {PAY_TOKENS.map((t) => (
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                YOU SEND
+              </span>
+              {/* Segmented token select, sourced from the live base-currency list */}
+              <div
+                className="flex glass-soft rounded-xl overflow-hidden"
+                role="radiogroup"
+                aria-label="Token to send"
+              >
+                {(payTokens.length ? payTokens : ["USDC", "SOL"]).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -130,14 +152,16 @@ export default function Payments() {
               </div>
             </div>
             <label className="flex flex-col gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">AMOUNT (USD)</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                AMOUNT ({token})
+              </span>
               <input
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 inputMode="decimal"
                 placeholder="1000"
                 className={`${inputCls} font-mono`}
-                aria-label="Amount in USD"
+                aria-label={`Amount in ${token}`}
               />
             </label>
           </div>
@@ -145,13 +169,18 @@ export default function Payments() {
             <button
               type="button"
               onClick={send}
-              disabled={!valid || sendState === "sending"}
+              disabled={!ready || settle.isPending}
               className="bg-red hover:bg-red-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-body font-semibold text-sm uppercase tracking-[0.08em] px-8 py-3.5 rounded transition-all duration-150 hover:-translate-y-0.5"
             >
-              {sendState === "sending" ? "Routing..." : sendState === "sent" ? "Settled" : "Send Payment"}
+              {settle.isPending ? "Routing..." : "Send & Settle"}
             </button>
+            {!wallet && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-warning">
+                CONNECT A WALLET IN THE HEADER TO SIGN
+              </span>
+            )}
             <AnimatePresence>
-              {sendState === "sent" && (
+              {settle.isSuccess && (
                 <motion.p
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -160,11 +189,16 @@ export default function Payments() {
                   className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.12em] text-foreground"
                 >
                   <SettledCheck />
-                  RECEIPT RCP-88413 · SETTLED IN 0.9S · ZERO FUNDS STRANDED
+                  {settle.data.signatures.length} LEG(S) SETTLED · RECORDED ON THE RAIL
                 </motion.p>
               )}
             </AnimatePresence>
           </div>
+          {settle.isError && (
+            <p className="font-mono text-xs uppercase tracking-[0.12em] text-red">
+              {settle.error.message}
+            </p>
+          )}
         </div>
 
         {/* Quote preview */}
@@ -172,84 +206,106 @@ export default function Payments() {
           <span className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
             QUOTE PREVIEW {handle.trim() ? `· ${handle.trim().toUpperCase()}` : ""}
           </span>
-          {quote ? (
+
+          {quote.isFetching && (
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+              DUAL-QUOTING JUPITER + RELAY…
+            </p>
+          )}
+
+          {quote.error && (
+            <p className="font-mono text-xs uppercase tracking-[0.12em] text-red">
+              {quote.error.message}
+            </p>
+          )}
+
+          {quote.data ? (
             <>
               <div className="flex flex-col">
-                {quote.legs.map((l) => (
+                {legs.map((leg) => (
                   <div
-                    key={l.asset}
+                    key={leg.assetMint}
                     className="flex items-center justify-between gap-3 border-b border-hairline/60 last:border-b-0 py-3.5"
                   >
                     <span className="flex items-center gap-2.5 min-w-0">
                       <span className="w-1.5 h-1.5 bg-red shrink-0" aria-hidden />
-                      <span className="font-mono text-sm text-foreground">{l.asset}</span>
+                      <span className="font-mono text-sm text-foreground">{leg.assetSymbol}</span>
                       <span className="font-mono text-[10px] uppercase tracking-[0.12em] border border-hairline/60 rounded-full px-2 py-0.5 text-muted2">
-                        {l.pct}%
+                        {leg.basisPoints / 100}%
+                      </span>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                        via {leg.quote.winner}
                       </span>
                     </span>
-                    <span className="font-mono text-sm tabular-nums text-secondary2">${formatUSD(l.amount)}</span>
+                    <span className="font-mono text-sm tabular-nums text-secondary2">
+                      {leg.quote.outAmountFormatted}
+                    </span>
                   </div>
                 ))}
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-hairline/60 pt-4">
                 <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-                  PROTOCOL FEE 0.4%
+                  TOTAL IN
                 </span>
-                <span className="font-mono text-sm tabular-nums text-red">${formatUSD(quote.fee)}</span>
+                <span className="font-mono text-sm tabular-nums text-foreground">
+                  {quote.data.portfolioResult.totalInAmountFormatted} {token}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-                  RECEIVER GETS
+                  RECEIVER WALLET
                 </span>
-                <span className="font-mono text-sm tabular-nums font-medium text-foreground">${formatUSD(quote.net)}</span>
+                <span className="font-mono text-xs tabular-nums text-secondary2">
+                  {quote.data.recipientWallet.slice(0, 4)}…{quote.data.recipientWallet.slice(-4)}
+                </span>
               </div>
               <p className="font-body text-sm text-muted2">
-                Receiver's election fills via on-chain quotes. Slippage beyond 50 bps reverts the leg to USDC.
+                Each leg is built, signed and confirmed separately: a three-asset election means
+                three wallet approvals. Slippage beyond tolerance safe-settles that leg to USDC.
               </p>
             </>
           ) : (
-            <p className="font-body text-sm text-muted2">Enter an amount to preview the settlement legs.</p>
+            !quote.isFetching &&
+            !quote.error && (
+              <p className="font-body text-sm text-muted2">
+                Enter a registered handle and an amount to dual-quote the settlement legs.
+              </p>
+            )
           )}
         </div>
       </div>
 
-      {/* Receipts with filter */}
-      <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            className={`font-mono text-[11px] uppercase tracking-[0.12em] border rounded-full px-4 py-2 transition-colors duration-150 ${
-              filter === f.key
-                ? "border-red bg-red text-white"
-                : "border-hairline/60 text-secondary2 hover:text-foreground hover:border-red"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <DashTable caption={`RECEIPTS · ${rows.length}`} columns={["Receipt", "Handle", "In", "Legs", "Fee", "Status", "Time"]} minWidth="min-w-[760px]">
-        {rows.map((r) => (
-          <DashRow key={r.id}>
-            <DashCell className="font-mono text-xs text-foreground">{r.id}</DashCell>
-            <DashCell className="text-foreground">{r.handle}</DashCell>
-            <DashCell className="font-mono text-xs">
-              {formatUSD(r.inAmount)} {r.inToken}
+      <DashTable
+        caption={`SESSION RECEIPTS · ${log.length}`}
+        columns={["Handle", "Asset", "Signature", "Status", "Time"]}
+        minWidth="min-w-[640px]"
+      >
+        {log.map((entry, index) => (
+          <DashRow key={`${entry.signature ?? entry.symbol}-${index}`}>
+            <DashCell className="text-foreground">@{entry.handle}</DashCell>
+            <DashCell className="font-mono text-sm text-red">{entry.symbol}</DashCell>
+            <DashCell className="font-mono text-xs text-muted2">
+              {entry.signature
+                ? `${entry.signature.slice(0, 6)}…${entry.signature.slice(-6)}`
+                : "—"}
             </DashCell>
-            <DashCell className="font-mono text-xs">
-              {r.legs.map((l) => `${l.asset} ${l.pct}%`).join(" + ")}
-            </DashCell>
-            <DashCell className="font-mono text-xs">${formatUSD(r.fee)}</DashCell>
             <DashCell>
-              <StatusPill tone={RECEIPT_TONE[r.status]} label={r.status} />
+              <StatusPill
+                tone={entry.signature ? "success" : "warning"}
+                label={entry.signature ? "confirmed" : "skipped"}
+              />
             </DashCell>
-            <DashCell className="font-mono text-xs text-muted2">{r.time}</DashCell>
+            <DashCell className="font-mono text-xs text-muted2">{entry.at}</DashCell>
           </DashRow>
         ))}
       </DashTable>
+
+      {log.length === 0 && (
+        <p className="font-body text-sm text-muted2">
+          Receipts from this session appear here. The API records every confirmed signature; there
+          is no receipt-history endpoint to read them back yet.
+        </p>
+      )}
     </ModulePage>
   );
 }

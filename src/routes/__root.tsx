@@ -17,6 +17,7 @@ import Footer from "@/components/Footer";
 import { ComingSoonProvider } from "@/components/ComingSoonModal";
 import { initLenis, getLenis, scrollToHash } from "@/lib/lenis";
 import SiteBackground from "@/components/SiteBackground";
+import { TenderWalletProvider } from "@/lib/wallet/wallet-context";
 import PreloaderGate from "@/components/PreloaderGate";
 
 function NotFoundComponent() {
@@ -177,19 +178,21 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ComingSoonProvider>
-        <PreloaderGate />
-        {/* Landing page stays pure white + rule grid; waves film elsewhere. */}
-        {pathname !== "/" && <SiteBackground />}
-        <div className="relative z-10 min-h-[100dvh] text-ink flex flex-col">
-          <Navbar />
-          <main className="flex-1 pt-20">
-            {/* Required: nested routes render here. */}
-            <Outlet />
-          </main>
-          <Footer />
-        </div>
-      </ComingSoonProvider>
+      <TenderWalletProvider>
+        <ComingSoonProvider>
+          <PreloaderGate />
+          {/* Landing page stays pure white + rule grid; static wash elsewhere. */}
+          {pathname !== "/" && <SiteBackground />}
+          <div className="relative z-10 min-h-[100dvh] text-ink flex flex-col">
+            <Navbar />
+            <main className="flex-1 pt-20">
+              {/* Required: nested routes render here. */}
+              <Outlet />
+            </main>
+            <Footer />
+          </div>
+        </ComingSoonProvider>
+      </TenderWalletProvider>
     </QueryClientProvider>
   );
 }

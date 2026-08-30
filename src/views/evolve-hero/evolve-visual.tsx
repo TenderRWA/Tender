@@ -4,10 +4,16 @@ import {
   DEFAULT_HERO_SCENE_CONFIG,
   type HeroSceneConfig,
 } from "../../lib/scene-evolve/hero-scene.config";
-import verticesAsset from "../../assets/evolve-vertices.json.asset.json";
 import { FADE_CONFIG, HERO_DELAY, VISUAL_CONFIG } from "./hero-motion";
 import { useHeroStage } from "./hero-stage";
 import { Spring } from "./spring";
+
+/**
+ * Point cloud for the bust, served from `public/`. Self-hosted on purpose:
+ * the upstream project pointed this at a sandbox-only `/__l5e/assets-v1/`
+ * URL that 404s outside it, which left the hero an empty canvas.
+ */
+const VERTICES_SRC = "/evolve-vertices.json";
 
 /** Keeps `three` out of the initial bundle and off the server. */
 const ParticleScene = lazy(() =>
@@ -50,7 +56,7 @@ export const EvolveVisual = () => {
         {mounted && (
           <Suspense fallback={null}>
             <ParticleScene
-              src={verticesAsset.url}
+              src={VERTICES_SRC}
               config={config}
               onReady={reportSceneReady}
               className="absolute inset-0 transform-gpu backface-hidden will-change-transform"

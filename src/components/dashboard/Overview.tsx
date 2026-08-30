@@ -1,156 +1,160 @@
 import ModulePage from "@/components/dashboard/ModulePage";
 import StatCard from "@/components/dashboard/StatCard";
-import DashTable, { DashRow, DashCell, StatusPill, RECEIPT_TONE } from "@/components/dashboard/DashTable";
-import { RECEIPTS, VOLUME_30D, STATUS_SPLIT, SPARKS, formatUSD } from "@/components/dashboard/data";
+import DashTable, { DashCell, DashRow, StatusPill } from "@/components/dashboard/DashTable";
+import { useHandle } from "@/hooks/useTender";
+import { useTenderSession } from "@/lib/tender-session";
+import { useWallet } from "@/lib/wallet/wallet-context";
 
-/** Settlement volume chart: gradient red bars with rounded tops + hover tooltip chips. */
-function VolumeChart() {
-  const max = Math.max(...VOLUME_30D);
-  const total = VOLUME_30D.reduce((s, v) => s + v, 0);
+const truncate = (value: string) =>
+  value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
+
+const formatDate = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toISOString().slice(0, 10);
+};
+
+/** Framed message used for every non-data state, so they all read the same. */
+function Notice({ title, body }: { title: string; body: string }) {
   return (
-    <div className="xl:col-span-8 glass glass-interactive rounded-2xl p-5 md:p-6 flex flex-col min-w-0 ">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <span className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
-          SETTLEMENT VOLUME 30D
-        </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-          TOTAL ${total.toLocaleString("en-US")}K · AVG ${Math.round(total / VOLUME_30D.length)}K/DAY
-        </span>
-      </div>
-      <div
-        className="flex-1 flex items-end gap-1 min-h-[190px]"
-        role="img"
-        aria-label="Red bar chart of daily settlement volume for the last 30 days"
-      >
-        {VOLUME_30D.map((v, i) => {
-          const isMax = v === max;
-          return (
-            <div key={i} className="relative flex-1 flex flex-col justify-end self-stretch group">
-              {/* Tooltip chip */}
-              <span className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full z-10 whitespace-nowrap border border-hairline/60 bg-base rounded px-2 py-1 font-mono text-[10px] tracking-[0.08em] text-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-xs">
-                <span className="text-muted2">D-{30 - i}</span> ${v}K
-              </span>
-              <div
-                className={`w-full rounded-t-[3px] bg-gradient-to-t transition-all duration-150 group-hover:from-red group-hover:to-red ${
-                  isMax ? "from-red-deep to-red" : "from-red-deep/60 to-red/70"
-                }`}
-                style={{ height: `${(v / max) * 190}px` }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 pt-3 border-t border-hairline/60 flex justify-between font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-        <span>D-30</span>
-        <span className="text-red">PEAK ${max}K</span>
-        <span>TODAY</span>
-      </div>
+    <div className="glass rounded-2xl p-6 md:p-8">
+      <p className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">{title}</p>
+      <p className="mt-3 font-body text-[15px] leading-[1.65] text-muted2 max-w-prose">{body}</p>
     </div>
   );
 }
 
-/** Status donut: three-segment SVG ring + center total label + legend. */
-function StatusDonut() {
-  const r = 54;
-  const c = 2 * Math.PI * r;
-  const totalReceipts = 38642;
-  let offset = 0;
-  return (
-    <div className="glass glass-interactive rounded-2xl p-5 md:p-6 flex flex-col items-center gap-7 h-full ">
-      <span className="self-start font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
-        SETTLEMENT STATUS
-      </span>
-      <div className="relative shrink-0">
-        <svg viewBox="0 0 140 140" className="w-40 h-40 -rotate-90" role="img" aria-label="Settlement status split donut chart">
-          <circle cx="70" cy="70" r={r} fill="none" strokeWidth="12" className="stroke-hairline" />
-          {STATUS_SPLIT.map((s) => {
-            const len = (s.value / 100) * c;
-            const el = (
-              <circle
-                key={s.label}
-                cx="70"
-                cy="70"
-                r={r}
-                fill="none"
-                stroke={s.color}
-                strokeWidth="12"
-                strokeDasharray={`${len} ${c - len}`}
-                strokeDashoffset={-offset}
-                strokeLinecap="butt"
-              />
-            );
-            offset += len;
-            return el;
-          })}
-        </svg>
-        {/* Center total label (outside svg so it stays upright) */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="font-mono font-medium text-2xl leading-none tracking-[-0.03em] text-foreground">
-            {totalReceipts.toLocaleString("en-US")}
-          </span>
-          <span className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted2">
-            RECEIPTS 30D
-          </span>
-        </div>
-      </div>
-      <div className="flex flex-col gap-4 w-full">
-        {STATUS_SPLIT.map((s) => (
-          <div key={s.label} className="flex items-center gap-3 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-            <span className="font-mono font-medium text-xl text-foreground w-14 shrink-0">{s.value}%</span>
-            <span className="font-body text-sm text-secondary2 truncate">
-              {s.label} <span className="text-muted2">· {s.note}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Overview: the connected handle's live registration and allocation, read from
+ * GET /api/v1/handles/:handle. Everything here comes off that response — the
+ * rail has no aggregate or history endpoint, so nothing is summarised across
+ * handles and no figure on this page is synthesised.
+ */
 export default function Overview() {
+  const { handle } = useTenderSession();
+  const { address: wallet } = useWallet();
+  const { data, isLoading, error } = useHandle(handle);
+
+  const elections = data?.elections ?? [];
+  const allocated = (data?.totalBasisPoints ?? 0) / 100;
+  const fullyAllocated = data?.totalBasisPoints === 10_000;
+  // The API keys writes on handle + owner wallet, so a mismatch means this
+  // session can read the handle but every write will be rejected.
+  const isOwner = Boolean(data && wallet && data.ownerWallet === wallet);
+
   return (
     <ModulePage
       index="01"
       label="OVERVIEW"
-      title="The rail at a glance."
-      blurb="Live view of settlement flow across your handles: volume, elections, receipts and system status for the last 30 days."
+      title={handle ? `@${handle}` : "Your handle."}
+      blurb="Registration and target allocation for the handle this terminal is acting as."
     >
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
-        <StatCard label="Total Settled" value={12408116} format={(n) => `$${formatUSD(n, 0)}`} delta="+18.2% / 30d" spark={SPARKS.settled} />
-        <StatCard label="Active Handles" value={8214} delta="+412 this week" spark={SPARKS.handles} />
-        <StatCard label="Elections Set" value={3109} delta="92% of handles" deltaTone="success" spark={SPARKS.elections} />
-        <StatCard label="Receipts Today" value={1286} delta="peak 14:00 UTC" deltaTone="warning" spark={SPARKS.receipts} />
-      </div>
+      {!handle && (
+        <Notice
+          title="NO HANDLE SET"
+          body="Set a handle from the bar at the top of the page to load its elections. If you do not have one yet, claim it first."
+        />
+      )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <VolumeChart />
-        <div className="xl:col-span-4 min-w-0">
-          <StatusDonut />
+      {handle && isLoading && <Notice title="LOADING" body={`Reading @${handle} from the rail.`} />}
+
+      {handle && error && (
+        <Notice
+          title="NOT FOUND"
+          body={
+            error instanceof Error
+              ? error.message
+              : `@${handle} could not be read from the rail.`
+          }
+        />
+      )}
+
+      {data && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+          <StatCard label="Elections Set" value={elections.length} delta={`${elections.length === 1 ? "asset" : "assets"} elected`} deltaTone={elections.length ? "success" : "warning"} />
+          <StatCard
+            label="Allocated"
+            value={allocated}
+            format={(n) => `${n.toFixed(n % 1 === 0 ? 0 : 2)}%`}
+            delta={fullyAllocated ? "fully allocated" : `${(100 - allocated).toFixed(2)}% unassigned`}
+            deltaTone={fullyAllocated ? "success" : "warning"}
+          />
         </div>
-      </div>
+      )}
 
-      {/* Recent receipts */}
-      <DashTable caption="RECENT RECEIPTS" columns={["Receipt", "Handle", "In", "Legs", "Fee", "Status", "Time"]} minWidth="min-w-[760px]">
-        {RECEIPTS.slice(0, 5).map((r) => (
-          <DashRow key={r.id}>
-            <DashCell className="font-mono text-xs text-foreground">{r.id}</DashCell>
-            <DashCell className="text-foreground">{r.handle}</DashCell>
-            <DashCell className="font-mono text-xs">
-              {formatUSD(r.inAmount)} {r.inToken}
-            </DashCell>
-            <DashCell className="font-mono text-xs">
-              {r.legs.map((l) => `${l.asset} ${l.pct}%`).join(" + ")}
-            </DashCell>
-            <DashCell className="font-mono text-xs">${formatUSD(r.fee)}</DashCell>
-            <DashCell>
-              <StatusPill tone={RECEIPT_TONE[r.status]} label={r.status} />
-            </DashCell>
-            <DashCell className="font-mono text-xs text-muted2">{r.time}</DashCell>
-          </DashRow>
-        ))}
-      </DashTable>
+      {data && (
+        <div className="glass rounded-2xl p-5 md:p-6 flex flex-col gap-4">
+          <span className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+            HANDLE
+          </span>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+            <div className="flex items-baseline justify-between gap-4 min-w-0">
+              <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">Owner</dt>
+              <dd className="font-mono text-xs text-foreground truncate" title={data.ownerWallet}>
+                {truncate(data.ownerWallet)}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-4 min-w-0">
+              <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                This wallet
+              </dt>
+              <dd>
+                <StatusPill
+                  tone={!wallet ? "muted" : isOwner ? "success" : "red"}
+                  label={!wallet ? "not connected" : isOwner ? "owner" : "not owner"}
+                />
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-4 min-w-0">
+              <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                Registered
+              </dt>
+              <dd className="font-mono text-xs text-foreground">{formatDate(data.createdAt)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-4 min-w-0">
+              <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                Updated
+              </dt>
+              <dd className="font-mono text-xs text-foreground">{formatDate(data.updatedAt)}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
+
+      {data && elections.length > 0 && (
+        <DashTable
+          caption="TARGET ALLOCATION"
+          columns={["Asset", "Mint", "Basis points", "Share"]}
+          minWidth="min-w-[560px]"
+        >
+          {elections.map((election) => {
+            const pct = election.basisPoints / 100;
+            return (
+              <DashRow key={election.mint || election.symbol}>
+                <DashCell className="text-foreground">{election.symbol}</DashCell>
+                <DashCell className="font-mono text-xs text-muted2">
+                  <span title={election.mint}>{truncate(election.mint)}</span>
+                </DashCell>
+                <DashCell className="font-mono text-xs">{election.basisPoints}</DashCell>
+                <DashCell className="font-mono text-xs text-foreground">
+                  <span className="flex items-center gap-3">
+                    <span className="h-1 w-24 shrink-0 rounded-full bg-hairline overflow-hidden">
+                      <span className="block h-full bg-red" style={{ width: `${pct}%` }} />
+                    </span>
+                    {pct}%
+                  </span>
+                </DashCell>
+              </DashRow>
+            );
+          })}
+        </DashTable>
+      )}
+
+      {data && elections.length === 0 && (
+        <Notice
+          title="NO ELECTIONS"
+          body="This handle is registered but has no target allocation yet. Set one in Elections and inbound payments will settle into it."
+        />
+      )}
     </ModulePage>
   );
 }

@@ -3,27 +3,19 @@ import { useSearchParams } from "@/lib/router-compat";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useComingSoon } from "@/components/ComingSoonModal";
+import { useHandleAvailability, useRegisterHandle } from "@/hooks/useTender";
+import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
+import { useTenderSession } from "@/lib/tender-session";
+import { useWallet } from "@/lib/wallet/wallet-context";
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 const ROLES = ["Receiver", "Sender", "Team-DAO", "Staker"] as const;
 type Role = (typeof ROLES)[number];
 
-/** Mock registry - handles already claimed on mainnet-beta. */
-const TAKEN = new Set([
-  "tender",
-  "admin",
-  "solana",
-  "infranodes",
-  "satoshi",
-  "jupiter",
-  "usdc",
-  "tender",
-]);
-
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
-type Availability = "idle" | "available" | "taken";
+type Availability = "idle" | "checking" | "available" | "taken" | "invalid";
 
 interface Election {
   spyx: number;
@@ -82,9 +74,7 @@ function ElectionRing({ election }: { election: Election }) {
         {segments}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-3xl font-medium tracking-[-0.03em] text-ink">
-          {total}%
-        </span>
+        <span className="font-mono text-3xl font-medium tracking-[-0.03em] text-ink">{total}%</span>
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
           ELECTION
         </span>
@@ -118,7 +108,7 @@ function PreviewCard({
               "font-mono text-[10px] uppercase tracking-[0.12em]",
               availability === "available" && "text-success",
               availability === "taken" && "text-red",
-              availability === "idle" && "text-muted2"
+              availability === "idle" && "text-muted2",
             )}
           >
             {availability === "available"
@@ -136,10 +126,7 @@ function PreviewCard({
 
       <div className="mb-8 grid grid-cols-3 gap-2">
         {SLIDERS.map((s) => (
-          <div
-            key={s.key}
-            className="rounded border border-hairline bg-base px-3 py-2 text-center"
-          >
+          <div key={s.key} className="rounded border border-hairline bg-base px-3 py-2 text-center">
             <span
               className="mx-auto mb-1 block h-1 w-4"
               style={{ backgroundColor: s.color }}
@@ -169,29 +156,62 @@ const fieldVariants = {
 export default function ClaimForm({ embedded = false }: { embedded?: boolean }) {
   const [searchParams] = useSearchParams();
   const [handle, setHandle] = useState("");
-  const [availability, setAvailability] = useState<Availability>("idle");
+  /** Handle the registry has actually been asked about (set on blur). */
+  const [checked, setChecked] = useState("");
   const [election, setElection] = useState<Election>({ spyx: 60, usdc: 30, gldx: 10 });
   const [role, setRole] = useState<Role>(() => roleFromQuery(searchParams.get("role")));
   const [done, setDone] = useState(false);
   const comingSoon = useComingSoon();
 
+  const { setHandle: setSessionHandle } = useTenderSession();
+  const { address: wallet, walletName } = useWallet();
+  const wellFormed = HANDLE_RE.test(checked);
+  const lookup = useHandleAvailability(checked, wellFormed);
+  const register = useRegisterHandle();
+
+  const availability: Availability = !checked
+    ? "idle"
+    : !wellFormed
+      ? "invalid"
+      : lookup.isFetching
+        ? "checking"
+        : lookup.data
+          ? lookup.data.registered
+            ? "taken"
+            : "available"
+          : "idle";
+
   const total = election.spyx + election.usdc + election.gldx;
   const validTotal = total === 100;
-  const canSubmit = availability === "available" && validTotal;
+  const canSubmit =
+    availability === "available" && validTotal && Boolean(wallet) && !register.isPending;
 
   const summary = useMemo(
     () =>
       `@${handle.trim()} - SPYx ${election.spyx} / USDC ${election.usdc} / GLDx ${election.gldx} - ${role.toUpperCase()}`,
-    [handle, election, role]
+    [handle, election, role],
   );
 
-  const checkHandle = (value: string) => {
-    const v = value.trim().toLowerCase();
-    if (!HANDLE_RE.test(v) || TAKEN.has(v)) {
-      setAvailability("taken");
-    } else {
-      setAvailability("available");
-    }
+  const submit = () => {
+    if (!canSubmit || !wallet) return;
+    const elections = SLIDERS.filter((s) => election[s.key] > 0).map((s) => ({
+      symbol: s.label,
+      basisPoints: election[s.key] * 100,
+    }));
+    register.mutate(
+      {
+        handle: checked,
+        ownerWallet: wallet,
+        metadata: { role },
+        elections,
+      },
+      {
+        onSuccess: () => {
+          setSessionHandle(checked);
+          setDone(true);
+        },
+      },
+    );
   };
 
   const setPct = (key: keyof Election, value: number) =>
@@ -233,9 +253,9 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                       {summary}
                     </p>
                     <p className="mt-4 max-w-md font-body text-[15px] leading-[1.65] text-white/80">
-                      Your mix is pinned in the election registry. When mainnet-beta
-                      opens, this handle settles every incoming payment exactly as
-                      elected - no held balances, ever.
+                      Your mix is pinned in the election registry. When mainnet-beta opens, this
+                      handle settles every incoming payment exactly as elected - no held balances,
+                      ever.
                     </p>
                   </div>
                   <button
@@ -252,7 +272,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                   transition={{ duration: 0.4, ease: EASE }}
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (canSubmit) setDone(true);
+                    submit();
                   }}
                   className="rounded border border-hairline bg-card2 p-8 md:p-12"
                 >
@@ -262,8 +282,8 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                         Claim your handle
                       </h2>
                       <p className="mt-3 font-body text-[15px] leading-[1.65] text-secondary2">
-                        Reserve a name in the election registry and pin your receive
-                        mix before mainnet-beta opens.
+                        Reserve a name in the election registry and pin your receive mix before
+                        mainnet-beta opens.
                       </p>
                     </motion.div>
                   )}
@@ -289,25 +309,28 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                         placeholder="yourname"
                         onChange={(e) => {
                           setHandle(e.target.value);
-                          setAvailability("idle");
+                          setChecked("");
                         }}
-                        onBlur={() => handle.trim() && checkHandle(handle)}
+                        onBlur={() => setChecked(handle.trim().toLowerCase())}
                         className={cn(
                           inputCls,
                           "pl-9",
                           availability === "available" && "border-success/60",
-                          availability === "taken" && "border-red"
+                          (availability === "taken" || availability === "invalid") && "border-red",
                         )}
                       />
                       <span
                         className={cn(
                           "pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 font-mono text-[10px] uppercase tracking-[0.12em]",
                           availability === "available" && "text-success",
-                          availability === "taken" && "text-red"
+                          availability === "checking" && "text-muted2",
+                          (availability === "taken" || availability === "invalid") && "text-red",
                         )}
                       >
+                        {availability === "checking" && "CHECKING…"}
                         {availability === "available" && "✓ AVAILABLE"}
                         {availability === "taken" && "✕ TAKEN"}
+                        {availability === "invalid" && "✕ INVALID"}
                       </span>
                     </div>
                     <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
@@ -324,7 +347,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                       <span
                         className={cn(
                           "font-mono text-xs uppercase tracking-[0.12em]",
-                          validTotal ? "text-success" : "animate-pulse text-red"
+                          validTotal ? "text-success" : "animate-pulse text-red",
                         )}
                         aria-live="polite"
                       >
@@ -335,9 +358,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                       {SLIDERS.map((s) => (
                         <div key={s.key}>
                           <div className="mb-2 flex items-center justify-between font-mono text-xs">
-                            <span className="uppercase tracking-[0.12em] text-ink">
-                              {s.label}
-                            </span>
+                            <span className="uppercase tracking-[0.12em] text-ink">{s.label}</span>
                             <span className="text-secondary2">{election[s.key]}%</span>
                           </div>
                           <input
@@ -376,13 +397,31 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                             "rounded border px-4 py-2.5 font-mono text-xs uppercase tracking-[0.08em] transition-colors duration-150",
                             role === r
                               ? "border-red bg-red text-white"
-                              : "border-hairline bg-base text-secondary2 hover:border-red hover:text-ink"
+                              : "border-hairline bg-base text-secondary2 hover:border-red hover:text-ink",
                           )}
                         >
                           {r}
                         </button>
                       ))}
                     </div>
+                  </motion.div>
+
+                  {/* 4. Owner wallet */}
+                  <motion.div variants={fieldVariants} className="mt-10">
+                    <span className="mb-3 block font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+                      Owner wallet
+                    </span>
+                    <div className="rounded border border-hairline bg-base p-5">
+                      <ConnectWalletButton />
+                      {wallet && (
+                        <p className="mt-3 break-all font-mono text-xs text-secondary2">
+                          {walletName} · {wallet}
+                        </p>
+                      )}
+                    </div>
+                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                      The wallet that will own the handle and receive every settled leg
+                    </p>
                   </motion.div>
 
                   {/* 5. Submit */}
@@ -395,11 +434,16 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                         "flex w-full items-center justify-center gap-2 rounded px-8 py-4 font-body text-sm font-semibold uppercase tracking-[0.08em] transition-all duration-150",
                         canSubmit
                           ? "bg-red text-white hover:-translate-y-0.5 hover:bg-red-hover"
-                          : "cursor-not-allowed bg-raised text-muted2"
+                          : "cursor-not-allowed bg-raised text-muted2",
                       )}
                     >
-                      ✓ Claim Handle
+                      {register.isPending ? "Claiming…" : "✓ Claim Handle"}
                     </motion.button>
+                    {register.isError && (
+                      <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-red">
+                        {register.error.message}
+                      </p>
+                    )}
                   </motion.div>
                 </motion.form>
               )}
