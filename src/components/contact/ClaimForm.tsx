@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "@/lib/router-compat";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ import { useHandleAvailability, useRegisterHandle } from "@/hooks/useTender";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
+import { Search, Plus, Trash2, ChevronDown, Check, Sparkles } from "lucide-react";
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -15,19 +16,151 @@ type Role = (typeof ROLES)[number];
 
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
-type Availability = "idle" | "checking" | "available" | "taken" | "invalid";
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.tenderrwa.com";
 
-interface Election {
-  spyx: number;
-  usdc: number;
-  gldx: number;
+export interface AssetOption {
+  symbol: string;
+  name: string;
+  mint: string;
+  decimals: number;
+  iconUrl?: string;
+  underlyingTicker?: string;
 }
 
-const SLIDERS: { key: keyof Election; label: string; color: string }[] = [
-  { key: "spyx", label: "SPYx", color: "#E8322A" },
-  { key: "usdc", label: "USDC", color: "#9A9AA0" },
-  { key: "gldx", label: "GLDx", color: "#5C5C63" },
+// Curated default popular stocks for instant selector rendering
+const DEFAULT_FEATURED_ASSETS: AssetOption[] = [
+  {
+    symbol: "SPYx",
+    name: "S&P 500 ETF",
+    mint: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/685116624ae31d5ceb724895_Ticker%3DSPX%2C%20Company%20Name%3DSP500%2C%20size%3D256x256.svg",
+    underlyingTicker: "SPY",
+  },
+  {
+    symbol: "USDC",
+    name: "USD Coin",
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    decimals: 6,
+    iconUrl: "https://coin-images.coingecko.com/coins/images/6319/large/usdc.png?1696506694",
+  },
+  {
+    symbol: "GLDx",
+    name: "Gold International",
+    mint: "Xs64245JybP9rgXJZJZcxKKRwqJnRpGKzoKtVNcyhoS",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a7099dd071779fc9537d8a0_ZJGLDx.png",
+    underlyingTicker: "GLD",
+  },
+  {
+    symbol: "NVDAx",
+    name: "NVIDIA Corp",
+    mint: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e2348398e0f63e6ef6d1_NVDAx.png",
+    underlyingTicker: "NVDA",
+  },
+  {
+    symbol: "TSLAx",
+    name: "Tesla Inc",
+    mint: "XsHtf5bL6x8i7YrEdkGZ9wPvTz5eBqC4uFwA9bV8yZ7",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e25d2ea99a6d0c1e0b57_TSLAx.png",
+    underlyingTicker: "TSLA",
+  },
+  {
+    symbol: "AAPLx",
+    name: "Apple Inc",
+    mint: "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e1c667468160352efdf1_AAPLx.png",
+    underlyingTicker: "AAPL",
+  },
+  {
+    symbol: "QQQx",
+    name: "Nasdaq-100 ETF",
+    mint: "Xs9mQZ4bA6yV3sK2dJ8fT1rL7uP5nC9wE3vH8kM6xQ4",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6851165e317b2b73ecb1313e_Ticker%3DNDX%2C%20Company%20Name%3DNASDAQ100%2C%20size%3D256x256.svg",
+    underlyingTicker: "QQQ",
+  },
+  {
+    symbol: "MSFTx",
+    name: "Microsoft Corp",
+    mint: "Xs5vQ8kP9nL2dJ7rT1mC4wE6uH3bA8yV5sK9fM7xQ2",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e217578ec09be4d35e1c_MSFTx.png",
+    underlyingTicker: "MSFT",
+  },
+  {
+    symbol: "AMZNx",
+    name: "Amazon.com Inc",
+    mint: "Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e1d51a0298d9e7fb3911_AMZNx.png",
+    underlyingTicker: "AMZN",
+  },
+  {
+    symbol: "GOOGLx",
+    name: "Alphabet Inc",
+    mint: "XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e1a967468160352efc1d_GOOGLx.png",
+    underlyingTicker: "GOOGL",
+  },
+  {
+    symbol: "METAx",
+    name: "Meta Platforms",
+    mint: "Xs7kP4bA6yV3sK2dJ8fT1rL7uP5nC9wE3vH8kM6xQ8",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e202578ec09be4d35db5_METAx.png",
+    underlyingTicker: "META",
+  },
+  {
+    symbol: "COINx",
+    name: "Coinbase Global",
+    mint: "Xs7ZdzSHLU9ftNJsii5fCeJhoRWSC32SQGzGQtePxNu",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e1eb705fa97f5d6f461a_COINx.png",
+    underlyingTicker: "COIN",
+  },
+  {
+    symbol: "PLTRx",
+    name: "Palantir Tech",
+    mint: "Xs4mQZ4bA6yV3sK2dJ8fT1rL7uP5nC9wE3vH8kM6xQ9",
+    decimals: 8,
+    iconUrl: "https://cdn.prod.website-files.com/655f3efc4be468487052e35a/6a58e23f03b573bb85973dd2_PLTRx.png",
+    underlyingTicker: "PLTR",
+  },
+  {
+    symbol: "SOL",
+    name: "Solana Native",
+    mint: "11111111111111111111111111111111",
+    decimals: 9,
+    iconUrl: "https://coin-images.coingecko.com/coins/images/4128/large/solana.png?1718769756",
+  },
 ];
+
+const COLOR_PALETTE = [
+  "#E8322A", // Tender Red
+  "#9A9AA0", // Slate Gray
+  "#5C5C63", // Dark Charcoal
+  "#3B82F6", // Electric Blue
+  "#10B981", // Emerald
+  "#F59E0B", // Amber
+  "#8B5CF6", // Purple
+  "#EC4899", // Pink
+];
+
+export interface ElectionItem {
+  id: string;
+  symbol: string;
+  name: string;
+  mint: string;
+  percent: number;
+  color: string;
+  iconUrl?: string;
+}
 
 function roleFromQuery(raw: string | null): Role {
   const v = (raw ?? "").toLowerCase();
@@ -39,25 +172,24 @@ function roleFromQuery(raw: string | null): Role {
 
 /* ---------------------------------- pie ---------------------------------- */
 
-function ElectionRing({ election }: { election: Election }) {
+function DynamicElectionRing({ items }: { items: ElectionItem[] }) {
   const r = 76;
   const C = 2 * Math.PI * r;
-  const values = [election.spyx, election.usdc, election.gldx];
-  const total = values.reduce((a, b) => a + b, 0);
+  const total = items.reduce((sum, item) => sum + item.percent, 0);
 
   let cursor = 0;
-  const segments = values.map((v, i) => {
-    const frac = total > 0 ? v / Math.max(total, 100) : 0;
-    const len = Math.max(frac * C - 4, 0);
+  const segments = items.map((item) => {
+    const frac = total > 0 ? item.percent / Math.max(total, 100) : 0;
+    const len = Math.max(frac * C - 3, 0);
     const seg = (
       <circle
-        key={SLIDERS[i].key}
+        key={item.id}
         cx="100"
         cy="100"
         r={r}
         fill="none"
-        stroke={SLIDERS[i].color}
-        strokeWidth={v > 0 ? 22 : 0}
+        stroke={item.color}
+        strokeWidth={item.percent > 0 ? 22 : 0}
         strokeDasharray={`${len} ${C - len}`}
         strokeDashoffset={-cursor + C / 4}
         style={{ transition: "stroke-dasharray 400ms ease-out, stroke-dashoffset 400ms ease-out" }}
@@ -74,7 +206,9 @@ function ElectionRing({ election }: { election: Election }) {
         {segments}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-3xl font-medium tracking-[-0.03em] text-ink">{total}%</span>
+        <span className="font-mono text-3xl font-medium tracking-[-0.03em] text-ink">
+          {total}%
+        </span>
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
           ELECTION
         </span>
@@ -83,16 +217,16 @@ function ElectionRing({ election }: { election: Election }) {
   );
 }
 
-/** Right-hand sticky preview: on-chain account card with live handle + pie. */
-function PreviewCard({
+/** Right-hand sticky preview: on-chain account card with live handle + dynamic pie. */
+function DynamicPreviewCard({
   handle,
   availability,
-  election,
+  items,
   role,
 }: {
   handle: string;
-  availability: Availability;
-  election: Election;
+  availability: "idle" | "checking" | "available" | "taken" | "invalid";
+  items: ElectionItem[];
   role: Role;
 }) {
   return (
@@ -108,40 +242,225 @@ function PreviewCard({
               "font-mono text-[10px] uppercase tracking-[0.12em]",
               availability === "available" && "text-success",
               availability === "taken" && "text-red",
-              availability === "idle" && "text-muted2",
+              availability === "invalid" && "text-red",
+              availability === "checking" && "text-muted2",
+              availability === "idle" && "text-muted2"
             )}
           >
             {availability === "available"
               ? "● AVAILABLE"
               : availability === "taken"
                 ? "● TAKEN"
-                : "ELECTION REGISTRY"}
+                : availability === "invalid"
+                  ? "● INVALID FORMAT"
+                  : availability === "checking"
+                    ? "● CHECKING REGISTRY..."
+                    : "ELECTION REGISTRY"}
           </p>
         </div>
       </div>
 
       <div className="my-8">
-        <ElectionRing election={election} />
+        <DynamicElectionRing items={items} />
       </div>
 
-      <div className="mb-8 grid grid-cols-3 gap-2">
-        {SLIDERS.map((s) => (
-          <div key={s.key} className="rounded border border-hairline bg-base px-3 py-2 text-center">
+      <div className="mb-8 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className="rounded border border-hairline bg-base px-3 py-2 text-center"
+          >
             <span
-              className="mx-auto mb-1 block h-1 w-4"
-              style={{ backgroundColor: s.color }}
+              className="mx-auto mb-1 block h-1 w-4 rounded-full"
+              style={{ backgroundColor: item.color }}
               aria-hidden
             />
-            <span className="font-mono text-xs text-secondary2">
-              {s.label} {election[s.key]}%
+            <span className="font-mono text-xs text-secondary2 block truncate">
+              {item.symbol} {item.percent}%
             </span>
           </div>
         ))}
       </div>
 
       <p className="border-t border-hairline pt-5 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted2">
-        {role.toUpperCase()} · SETTLES VIA JUPITER · NON-CUSTODIAL · SOLANA
+        {role.toUpperCase()} · SETTLES VIA JUPITER & RELAY · NON-CUSTODIAL · SOLANA
       </p>
+    </div>
+  );
+}
+
+/* ----------------------------- Asset Modal ----------------------------- */
+
+function AssetPickerModal({
+  isOpen,
+  onClose,
+  onSelect,
+  currentSymbol,
+  allAvailableAssets,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (asset: AssetOption) => void;
+  currentSymbol: string;
+  allAvailableAssets: AssetOption[];
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<AssetOption[]>(allAvailableAssets);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSearchTerm("");
+      setSearchResults(allAvailableAssets);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen, allAvailableAssets]);
+
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setSearchResults(allAvailableAssets);
+      return;
+    }
+
+    const q = searchTerm.toLowerCase().trim();
+    // Immediate local match
+    const localMatches = allAvailableAssets.filter(
+      (a) =>
+        a.symbol.toLowerCase().includes(q) ||
+        a.name.toLowerCase().includes(q) ||
+        (a.underlyingTicker && a.underlyingTicker.toLowerCase().includes(q))
+    );
+    setSearchResults(localMatches);
+
+    // Debounced remote API search across 714 tokens
+    const timer = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_BASE}/api/v1/assets?q=${encodeURIComponent(q)}&limit=30`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.assets && data.assets.length > 0) {
+            // Deduplicate with local list
+            const combined = [...localMatches];
+            for (const item of data.assets) {
+              if (!combined.some((c) => c.mint === item.mint || c.symbol === item.symbol)) {
+                combined.push(item);
+              }
+            }
+            setSearchResults(combined);
+          }
+        }
+      } catch (err) {
+        // Fallback gracefully
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, allAvailableAssets]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="w-full max-w-lg rounded border border-hairline bg-card2 p-6 shadow-2xl"
+      >
+        <div className="flex items-center justify-between pb-4 border-b border-hairline">
+          <div>
+            <h3 className="font-display text-lg font-medium text-ink">Select Receive Asset</h3>
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+              714+ Solana Tokenized Stocks & Base Currencies
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1.5 font-mono text-xs text-muted2 hover:bg-base hover:text-ink"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative my-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted2" />
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Search symbol, company, or ticker (e.g. NVDA, Apple, S&P 500)..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded border border-hairline bg-base pl-9 pr-4 py-2.5 font-mono text-xs text-ink placeholder:text-muted2 outline-none focus:border-red"
+          />
+        </div>
+
+        {/* Asset List */}
+        <div className="max-h-[320px] overflow-y-auto space-y-1 pr-1">
+          {searchResults.length === 0 ? (
+            <div className="py-8 text-center font-mono text-xs text-muted2">
+              {loading ? "Searching 714+ Solana xStocks..." : "No assets match your search"}
+            </div>
+          ) : (
+            searchResults.map((asset) => {
+              const isSelected = asset.symbol === currentSymbol;
+              return (
+                <button
+                  key={asset.mint || asset.symbol}
+                  type="button"
+                  onClick={() => {
+                    onSelect(asset);
+                    onClose();
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded p-2.5 transition-colors text-left",
+                    isSelected
+                      ? "bg-red/10 border border-red/30 text-ink"
+                      : "hover:bg-base border border-transparent text-secondary2 hover:text-ink"
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {asset.iconUrl ? (
+                      <img
+                        src={asset.iconUrl}
+                        alt={asset.symbol}
+                        className="h-7 w-7 rounded-full object-cover border border-hairline shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <div className="h-7 w-7 rounded-full bg-hairline flex items-center justify-center font-mono text-[10px] font-bold text-ink shrink-0">
+                        {asset.symbol.slice(0, 3)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-semibold text-ink uppercase">
+                          {asset.symbol}
+                        </span>
+                        {asset.underlyingTicker && (
+                          <span className="font-mono text-[10px] text-muted2">
+                            ({asset.underlyingTicker})
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate font-body text-xs text-muted2">{asset.name}</p>
+                    </div>
+                  </div>
+
+                  {isSelected && <Check className="h-4 w-4 text-red shrink-0" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -156,66 +475,186 @@ const fieldVariants = {
 export default function ClaimForm({ embedded = false }: { embedded?: boolean }) {
   const [searchParams] = useSearchParams();
   const [handle, setHandle] = useState("");
-  /** Handle the registry has actually been asked about (set on blur). */
   const [checked, setChecked] = useState("");
-  const [election, setElection] = useState<Election>({ spyx: 60, usdc: 30, gldx: 10 });
   const [role, setRole] = useState<Role>(() => roleFromQuery(searchParams.get("role")));
   const [done, setDone] = useState(false);
   const comingSoon = useComingSoon();
+  const { wallet, walletName } = useWallet();
+  const { setSession } = useTenderSession();
 
-  const { setHandle: setSessionHandle } = useTenderSession();
-  const { address: wallet, walletName } = useWallet();
-  const wellFormed = HANDLE_RE.test(checked);
-  const lookup = useHandleAvailability(checked, wellFormed);
-  const register = useRegisterHandle();
+  // Dynamic election items
+  const [items, setItems] = useState<ElectionItem[]>([
+    {
+      id: "item-1",
+      symbol: "SPYx",
+      name: "S&P 500 ETF",
+      mint: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
+      percent: 60,
+      color: COLOR_PALETTE[0],
+      iconUrl: DEFAULT_FEATURED_ASSETS[0].iconUrl,
+    },
+    {
+      id: "item-2",
+      symbol: "USDC",
+      name: "USD Coin",
+      mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      percent: 30,
+      color: COLOR_PALETTE[1],
+      iconUrl: DEFAULT_FEATURED_ASSETS[1].iconUrl,
+    },
+    {
+      id: "item-3",
+      symbol: "GLDx",
+      name: "Gold International",
+      mint: "Xs64245JybP9rgXJZJZcxKKRwqJnRpGKzoKtVNcyhoS",
+      percent: 10,
+      color: COLOR_PALETTE[2],
+      iconUrl: DEFAULT_FEATURED_ASSETS[2].iconUrl,
+    },
+  ]);
 
-  const availability: Availability = !checked
-    ? "idle"
-    : !wellFormed
-      ? "invalid"
-      : lookup.isFetching
-        ? "checking"
-        : lookup.data
-          ? lookup.data.registered
-            ? "taken"
-            : "available"
-          : "idle";
+  const [availableAssets, setAvailableAssets] = useState<AssetOption[]>(DEFAULT_FEATURED_ASSETS);
+  const [activePickerIndex, setActivePickerIndex] = useState<number | null>(null);
 
-  const total = election.spyx + election.usdc + election.gldx;
+  // Load catalog on mount
+  useEffect(() => {
+    async function fetchAssets() {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/assets?featured=true`);
+        if (res.ok) {
+          const data = await res.json();
+          const combined = [
+            ...(data.baseCurrencies || []),
+            ...(data.featured || []),
+          ];
+          if (combined.length > 0) {
+            setAvailableAssets(combined);
+          }
+        }
+      } catch (e) {
+        // fallback
+      }
+    }
+    fetchAssets();
+  }, []);
+
+  const total = items.reduce((sum, item) => sum + item.percent, 0);
   const validTotal = total === 100;
-  const canSubmit =
-    availability === "available" && validTotal && Boolean(wallet) && !register.isPending;
 
-  const summary = useMemo(
-    () =>
-      `@${handle.trim()} - SPYx ${election.spyx} / USDC ${election.usdc} / GLDx ${election.gldx} - ${role.toUpperCase()}`,
-    [handle, election, role],
-  );
+  const validHandleFormat = HANDLE_RE.test(checked);
+  const availabilityQuery = useHandleAvailability(checked, validHandleFormat);
 
-  const submit = () => {
-    if (!canSubmit || !wallet) return;
-    const elections = SLIDERS.filter((s) => election[s.key] > 0).map((s) => ({
-      symbol: s.label,
-      basisPoints: election[s.key] * 100,
-    }));
-    register.mutate(
-      {
-        handle: checked,
-        ownerWallet: wallet,
-        metadata: { role },
-        elections,
-      },
-      {
-        onSuccess: () => {
-          setSessionHandle(checked);
-          setDone(true);
-        },
-      },
+  const availability: "idle" | "checking" | "available" | "taken" | "invalid" = useMemo(() => {
+    if (!checked) return "idle";
+    if (!validHandleFormat) return "invalid";
+    if (availabilityQuery.isLoading) return "checking";
+    if (availabilityQuery.data) {
+      return availabilityQuery.data.available ? "available" : "taken";
+    }
+    return "idle";
+  }, [checked, validHandleFormat, availabilityQuery.isLoading, availabilityQuery.data]);
+
+  const register = useRegisterHandle();
+  const canSubmit = availability === "available" && validTotal && Boolean(wallet) && !register.isPending;
+
+  const summary = useMemo(() => {
+    const allocString = items.map((it) => `${it.symbol} ${it.percent}%`).join(" / ");
+    return `@${handle.trim()} - ${allocString} - ${role.toUpperCase()}`;
+  }, [handle, items, role]);
+
+  const updateItemPercent = (id: string, newPercent: number) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, percent: newPercent } : item))
     );
   };
 
-  const setPct = (key: keyof Election, value: number) =>
-    setElection((e) => ({ ...e, [key]: value }));
+  const updateItemAsset = (index: number, newAsset: AssetOption) => {
+    setItems((prev) => {
+      const copy = [...prev];
+      copy[index] = {
+        ...copy[index],
+        symbol: newAsset.symbol,
+        name: newAsset.name,
+        mint: newAsset.mint,
+        iconUrl: newAsset.iconUrl,
+      };
+      return copy;
+    });
+  };
+
+  const addAssetItem = () => {
+    if (items.length >= 6) return;
+    const existingSymbols = new Set(items.map((i) => i.symbol));
+    const nextAsset = availableAssets.find((a) => !existingSymbols.has(a.symbol)) || availableAssets[3];
+    const nextColor = COLOR_PALETTE[items.length % COLOR_PALETTE.length];
+
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `item-${Date.now()}`,
+        symbol: nextAsset.symbol,
+        name: nextAsset.name,
+        mint: nextAsset.mint,
+        percent: 0,
+        color: nextColor,
+        iconUrl: nextAsset.iconUrl,
+      },
+    ]);
+  };
+
+  const removeItem = (id: string) => {
+    if (items.length <= 1) return;
+    setItems((prev) => prev.filter((it) => it.id !== id));
+  };
+
+  const balanceEvenly = () => {
+    const count = items.length;
+    const baseShare = Math.floor(100 / count);
+    const remainder = 100 % count;
+
+    setItems((prev) =>
+      prev.map((it, idx) => ({
+        ...it,
+        percent: idx === 0 ? baseShare + remainder : baseShare,
+      }))
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit || !wallet) return;
+
+    const elections = items.map((it) => ({
+      symbol: it.symbol,
+      mint: it.mint,
+      basisPoints: it.percent * 100,
+    }));
+
+    try {
+      await register.mutateAsync({
+        handle: handle.trim().toLowerCase(),
+        ownerWallet: wallet,
+        metadata: { role, submittedAt: new Date().toISOString() },
+        elections,
+      });
+
+      setSession({
+        handle: handle.trim().toLowerCase(),
+        walletAddress: wallet,
+        walletName,
+        elections: items.map((it) => ({
+          symbol: it.symbol,
+          mint: it.mint,
+          basisPoints: it.percent * 100,
+          percentage: it.percent,
+        })),
+      });
+
+      setDone(true);
+    } catch {
+      // Error is caught by register.isError in UI
+    }
+  };
 
   const inputCls =
     "w-full rounded border border-hairline bg-base px-4 py-3.5 font-mono text-sm text-ink caret-red placeholder:text-muted2 outline-none transition-colors duration-150 focus:border-red";
@@ -253,9 +692,9 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                       {summary}
                     </p>
                     <p className="mt-4 max-w-md font-body text-[15px] leading-[1.65] text-white/80">
-                      Your mix is pinned in the election registry. When mainnet-beta opens, this
-                      handle settles every incoming payment exactly as elected - no held balances,
-                      ever.
+                      Your custom mix is pinned in the election registry. When mainnet-beta
+                      opens, this handle settles every incoming payment exactly as
+                      elected - no held balances, ever.
                     </p>
                   </div>
                   <button
@@ -270,10 +709,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                   key="form"
                   exit={{ rotateY: -8, opacity: 0 }}
                   transition={{ duration: 0.4, ease: EASE }}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    submit();
-                  }}
+                  onSubmit={handleSubmit}
                   className="rounded border border-hairline bg-card2 p-8 md:p-12"
                 >
                   {!embedded && (
@@ -282,8 +718,8 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                         Claim your handle
                       </h2>
                       <p className="mt-3 font-body text-[15px] leading-[1.65] text-secondary2">
-                        Reserve a name in the election registry and pin your receive mix before
-                        mainnet-beta opens.
+                        Reserve a name in the election registry and pin your receive
+                        mix before mainnet-beta opens.
                       </p>
                     </motion.div>
                   )}
@@ -316,7 +752,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                           inputCls,
                           "pl-9",
                           availability === "available" && "border-success/60",
-                          (availability === "taken" || availability === "invalid") && "border-red",
+                          (availability === "taken" || availability === "invalid") && "border-red"
                         )}
                       />
                       <span
@@ -324,7 +760,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                           "pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 font-mono text-[10px] uppercase tracking-[0.12em]",
                           availability === "available" && "text-success",
                           availability === "checking" && "text-muted2",
-                          (availability === "taken" || availability === "invalid") && "text-red",
+                          (availability === "taken" || availability === "invalid") && "text-red"
                         )}
                       >
                         {availability === "checking" && "CHECKING…"}
@@ -338,45 +774,115 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                     </p>
                   </motion.div>
 
-                  {/* 2. Election sliders */}
+                  {/* 2. Dynamic Election Selectors & Sliders */}
                   <motion.div variants={fieldVariants} className="mt-10">
                     <div className="mb-3 flex items-center justify-between">
                       <span className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
                         Your election
                       </span>
-                      <span
-                        className={cn(
-                          "font-mono text-xs uppercase tracking-[0.12em]",
-                          validTotal ? "text-success" : "animate-pulse text-red",
-                        )}
-                        aria-live="polite"
-                      >
-                        TOTAL {total}%
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={balanceEvenly}
+                          className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-muted2 hover:text-ink transition-colors"
+                        >
+                          <Sparkles className="h-3 w-3 text-red" />
+                          Balance
+                        </button>
+                        <span
+                          className={cn(
+                            "font-mono text-xs uppercase tracking-[0.12em]",
+                            validTotal ? "text-success" : "animate-pulse text-red"
+                          )}
+                          aria-live="polite"
+                        >
+                          TOTAL {total}%
+                        </span>
+                      </div>
                     </div>
-                    <div className="space-y-5 rounded border border-hairline bg-base p-5">
-                      {SLIDERS.map((s) => (
-                        <div key={s.key}>
-                          <div className="mb-2 flex items-center justify-between font-mono text-xs">
-                            <span className="uppercase tracking-[0.12em] text-ink">{s.label}</span>
-                            <span className="text-secondary2">{election[s.key]}%</span>
+
+                    <div className="space-y-4 rounded border border-hairline bg-base p-5">
+                      {items.map((item, index) => (
+                        <div key={item.id} className="space-y-2 border-b border-hairline/60 pb-3 last:border-0 last:pb-0">
+                          <div className="flex items-center justify-between">
+                            {/* Asset Selector Trigger */}
+                            <button
+                              type="button"
+                              onClick={() => setActivePickerIndex(index)}
+                              className="group inline-flex items-center gap-2 rounded border border-hairline bg-card2 px-2.5 py-1.5 hover:border-red transition-colors"
+                            >
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ backgroundColor: item.color }}
+                                aria-hidden
+                              />
+                              {item.iconUrl ? (
+                                <img
+                                  src={item.iconUrl}
+                                  alt={item.symbol}
+                                  className="h-4 w-4 rounded-full object-cover shrink-0"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = "none";
+                                  }}
+                                />
+                              ) : null}
+                              <span className="font-mono text-xs font-bold text-ink uppercase">
+                                {item.symbol}
+                              </span>
+                              <span className="hidden sm:inline font-body text-[11px] text-muted2 truncate max-w-[120px]">
+                                {item.name}
+                              </span>
+                              <ChevronDown className="h-3.5 w-3.5 text-muted2 group-hover:text-red transition-colors" />
+                            </button>
+
+                            {/* Percentage display + Delete button */}
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono text-xs font-semibold text-secondary2">
+                                {item.percent}%
+                              </span>
+                              {items.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeItem(item.id)}
+                                  className="text-muted2 hover:text-red p-1 transition-colors"
+                                  title="Remove asset"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
+
+                          {/* Percentage Slider */}
                           <input
                             type="range"
                             min={0}
                             max={100}
                             step={5}
-                            value={election[s.key]}
-                            aria-label={`${s.label} percentage`}
-                            onChange={(e) => setPct(s.key, Number(e.target.value))}
+                            value={item.percent}
+                            aria-label={`${item.symbol} percentage`}
+                            onChange={(e) => updateItemPercent(item.id, Number(e.target.value))}
                             className="h-1 w-full cursor-pointer appearance-none rounded bg-hairline accent-[#E8322A]"
                           />
                         </div>
                       ))}
+
+                      {/* Add Asset Button */}
+                      {items.length < 6 && (
+                        <button
+                          type="button"
+                          onClick={addAssetItem}
+                          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-hairline py-2.5 font-mono text-xs uppercase tracking-[0.08em] text-muted2 hover:border-red hover:text-ink transition-colors"
+                        >
+                          <Plus className="h-3.5 w-3.5 text-red" />
+                          Add Receive Asset ({items.length}/6)
+                        </button>
+                      )}
                     </div>
+
                     {!validTotal && (
                       <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-red">
-                        Election must total 100% to claim.
+                        Election must total exactly 100% to claim (Current: {total}%).
                       </p>
                     )}
                   </motion.div>
@@ -397,7 +903,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                             "rounded border px-4 py-2.5 font-mono text-xs uppercase tracking-[0.08em] transition-colors duration-150",
                             role === r
                               ? "border-red bg-red text-white"
-                              : "border-hairline bg-base text-secondary2 hover:border-red hover:text-ink",
+                              : "border-hairline bg-base text-secondary2 hover:border-red hover:text-ink"
                           )}
                         >
                           {r}
@@ -434,7 +940,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                         "flex w-full items-center justify-center gap-2 rounded px-8 py-4 font-body text-sm font-semibold uppercase tracking-[0.08em] transition-all duration-150",
                         canSubmit
                           ? "bg-red text-white hover:-translate-y-0.5 hover:bg-red-hover"
-                          : "cursor-not-allowed bg-raised text-muted2",
+                          : "cursor-not-allowed bg-raised text-muted2"
                       )}
                     >
                       {register.isPending ? "Claiming…" : "✓ Claim Handle"}
@@ -450,17 +956,30 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
             </AnimatePresence>
           </motion.div>
 
-          {/* Live preview */}
+          {/* Live dynamic preview */}
           <motion.div variants={fieldVariants}>
-            <PreviewCard
+            <DynamicPreviewCard
               handle={handle}
               availability={availability}
-              election={election}
+              items={items}
               role={role}
             />
           </motion.div>
         </motion.div>
       </div>
+
+      {/* Asset Picker Modal */}
+      <AssetPickerModal
+        isOpen={activePickerIndex !== null}
+        onClose={() => setActivePickerIndex(null)}
+        currentSymbol={activePickerIndex !== null ? items[activePickerIndex]?.symbol : ""}
+        allAvailableAssets={availableAssets}
+        onSelect={(newAsset) => {
+          if (activePickerIndex !== null) {
+            updateItemAsset(activePickerIndex, newAsset);
+          }
+        }}
+      />
     </section>
   );
 }
