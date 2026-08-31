@@ -5,12 +5,12 @@ import { cn } from "@/lib/utils";
 import { useComingSoon } from "@/components/ComingSoonModal";
 import { useHandleAvailability, useRegisterHandle } from "@/hooks/useTender";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
+import WalletModal from "@/components/wallet/WalletModal";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
 import {
   getInitialTokenColor,
   extractDominantColorFromImage,
-  hashColorFromSymbol,
 } from "@/lib/token-color";
 import { Search, Plus, Trash2, ChevronDown, Check, Sparkles } from "lucide-react";
 
@@ -505,8 +505,10 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
   const [checked, setChecked] = useState("");
   const [role, setRole] = useState<Role>(() => roleFromQuery(searchParams.get("role")));
   const [done, setDone] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const comingSoon = useComingSoon();
-  const { wallet, walletName } = useWallet();
+  const { address, walletName } = useWallet();
+  const wallet = address;
   const { setSession } = useTenderSession();
 
   // Dynamic election items with derived brand colors
@@ -579,6 +581,15 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
     });
   }, [items.map((i) => i.iconUrl).join(",")]);
 
+  // Real-time automatic debounce on handle input
+  useEffect(() => {
+    const clean = handle.trim().toLowerCase();
+    const timer = setTimeout(() => {
+      setChecked(clean);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [handle]);
+
   const total = items.reduce((sum, item) => sum + item.percent, 0);
   const validTotal = total === 100;
 
@@ -596,7 +607,11 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
   }, [checked, validHandleFormat, availabilityQuery.isLoading, availabilityQuery.data]);
 
   const register = useRegisterHandle();
-  const canSubmit = availability === "available" && validTotal && Boolean(wallet) && !register.isPending;
+  const canSubmit =
+    availability === "available" &&
+    validTotal &&
+    Boolean(wallet) &&
+    !register.isPending;
 
   const summary = useMemo(() => {
     const allocString = items.map((it) => `${it.symbol} ${it.percent}%`).join(" / ");
@@ -688,11 +703,14 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
     e.preventDefault();
     if (!canSubmit || !wallet) return;
 
-    const elections = items.map((it) => ({
-      symbol: it.symbol,
-      mint: it.mint,
-      basisPoints: it.percent * 100,
-    }));
+    // Filter out 0% allocations so only active legs are committed
+    const elections = items
+      .filter((it) => it.percent > 0)
+      .map((it) => ({
+        symbol: it.symbol,
+        mint: it.mint,
+        basisPoints: it.percent * 100,
+      }));
 
     try {
       await register.mutateAsync({
@@ -706,12 +724,14 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
         handle: handle.trim().toLowerCase(),
         walletAddress: wallet,
         walletName,
-        elections: items.map((it) => ({
-          symbol: it.symbol,
-          mint: it.mint,
-          basisPoints: it.percent * 100,
-          percentage: it.percent,
-        })),
+        elections: items
+          .filter((it) => it.percent > 0)
+          .map((it) => ({
+            symbol: it.symbol,
+            mint: it.mint,
+            basisPoints: it.percent * 100,
+            percentage: it.percent,
+          })),
       });
 
       setDone(true);
@@ -807,11 +827,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                         autoComplete="off"
                         spellCheck={false}
                         placeholder="yourname"
-                        onChange={(e) => {
-                          setHandle(e.target.value);
-                          setChecked("");
-                        }}
-                        onBlur={() => setChecked(handle.trim().toLowerCase())}
+                        onChange={(e) => setHandle(e.target.value)}
                         className={cn(
                           inputCls,
                           "pl-9",
@@ -834,7 +850,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                       </span>
                     </div>
                     <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-                      3-20 chars · a-z 0-9 _ · registry-checked on blur
+                      3-20 chars · a-z 0-9 _ · registry-checked automatically
                     </p>
                   </motion.div>
 
@@ -1003,21 +1019,44 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                     </p>
                   </motion.div>
 
-                  {/* 5. Submit */}
+                  {/* 5. Submit Button */}
                   <motion.div variants={fieldVariants} className="mt-10">
-                    <motion.button
-                      type="submit"
-                      disabled={!canSubmit}
-                      whileTap={canSubmit ? { scale: 0.96 } : undefined}
-                      className={cn(
-                        "flex w-full items-center justify-center gap-2 rounded px-8 py-4 font-body text-sm font-semibold uppercase tracking-[0.08em] transition-all duration-150",
-                        canSubmit
-                          ? "bg-red text-white hover:-translate-y-0.5 hover:bg-red-hover"
-                          : "cursor-not-allowed bg-raised text-muted2"
-                      )}
-                    >
-                      {register.isPending ? "Claiming…" : "✓ Claim Handle"}
-                    </motion.button>
+                    {!wallet ? (
+                      <motion.button
+                        type="button"
+                        onClick={() => setWalletModalOpen(true)}
+                        whileTap={{ scale: 0.96 }}
+                        className="flex w-full items-center justify-center gap-2 rounded px-8 py-4 font-body text-sm font-semibold uppercase tracking-[0.08em] bg-red text-white hover:bg-red-hover transition-all duration-150 cursor-pointer shadow-md"
+                      >
+                        Connect Wallet to Claim
+                      </motion.button>
+                    ) : (
+                      <motion.button
+                        type="submit"
+                        disabled={!canSubmit}
+                        whileTap={canSubmit ? { scale: 0.96 } : undefined}
+                        className={cn(
+                          "flex w-full items-center justify-center gap-2 rounded px-8 py-4 font-body text-sm font-semibold uppercase tracking-[0.08em] transition-all duration-150",
+                          canSubmit
+                            ? "bg-red text-white hover:-translate-y-0.5 hover:bg-red-hover cursor-pointer"
+                            : "cursor-not-allowed bg-raised text-muted2"
+                        )}
+                      >
+                        {register.isPending
+                          ? "Claiming…"
+                          : !handle.trim()
+                            ? "Enter a Handle"
+                            : availability === "checking"
+                              ? "Checking Availability…"
+                              : availability === "taken"
+                                ? "Handle is Already Taken"
+                                : availability === "invalid"
+                                  ? "Invalid Handle Format"
+                                  : !validTotal
+                                    ? `Total Must Be 100% (${total}%)`
+                                    : "✓ Claim Handle"}
+                      </motion.button>
+                    )}
                     {register.isError && (
                       <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.12em] text-red">
                         {register.error.message}
@@ -1053,6 +1092,9 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
           }
         }}
       />
+
+      {/* Wallet Modal */}
+      <WalletModal open={walletModalOpen} onClose={() => setWalletModalOpen(false)} />
     </section>
   );
 }
