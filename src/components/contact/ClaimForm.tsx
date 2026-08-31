@@ -590,7 +590,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
     if (!validHandleFormat) return "invalid";
     if (availabilityQuery.isLoading) return "checking";
     if (availabilityQuery.data) {
-      return availabilityQuery.data.available ? "available" : "taken";
+      return availabilityQuery.data.registered ? "taken" : "available";
     }
     return "idle";
   }, [checked, validHandleFormat, availabilityQuery.isLoading, availabilityQuery.data]);
