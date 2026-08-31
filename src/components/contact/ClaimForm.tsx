@@ -7,6 +7,11 @@ import { useHandleAvailability, useRegisterHandle } from "@/hooks/useTender";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
+import {
+  getInitialTokenColor,
+  extractDominantColorFromImage,
+  hashColorFromSymbol,
+} from "@/lib/token-color";
 import { Search, Plus, Trash2, ChevronDown, Check, Sparkles } from "lucide-react";
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -15,6 +20,7 @@ const ROLES = ["Receiver", "Sender", "Team-DAO", "Staker"] as const;
 type Role = (typeof ROLES)[number];
 
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
+const MAX_ELECTION_ASSETS = 10;
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.tenderrwa.com";
 
@@ -109,7 +115,7 @@ const DEFAULT_FEATURED_ASSETS: AssetOption[] = [
     underlyingTicker: "GOOGL",
   },
   {
-    symbol: "METAx",
+    symbol: "METAX",
     name: "Meta Platforms",
     mint: "Xs7kP4bA6yV3sK2dJ8fT1rL7uP5nC9wE3vH8kM6xQ8",
     decimals: 8,
@@ -139,17 +145,6 @@ const DEFAULT_FEATURED_ASSETS: AssetOption[] = [
     decimals: 9,
     iconUrl: "https://coin-images.coingecko.com/coins/images/4128/large/solana.png?1718769756",
   },
-];
-
-const COLOR_PALETTE = [
-  "#E8322A", // Tender Red
-  "#9A9AA0", // Slate Gray
-  "#5C5C63", // Dark Charcoal
-  "#3B82F6", // Electric Blue
-  "#10B981", // Emerald
-  "#F59E0B", // Amber
-  "#8B5CF6", // Purple
-  "#EC4899", // Pink
 ];
 
 export interface ElectionItem {
@@ -192,7 +187,7 @@ function DynamicElectionRing({ items }: { items: ElectionItem[] }) {
         strokeWidth={item.percent > 0 ? 22 : 0}
         strokeDasharray={`${len} ${C - len}`}
         strokeDashoffset={-cursor + C / 4}
-        style={{ transition: "stroke-dasharray 400ms ease-out, stroke-dashoffset 400ms ease-out" }}
+        style={{ transition: "stroke-dasharray 400ms ease-out, stroke-dashoffset 400ms ease-out, stroke 300ms ease" }}
       />
     );
     cursor += frac * C;
@@ -264,14 +259,14 @@ function DynamicPreviewCard({
         <DynamicElectionRing items={items} />
       </div>
 
-      <div className="mb-8 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="mb-8 grid grid-cols-2 gap-2 sm:grid-cols-3 max-h-[160px] overflow-y-auto pr-1">
         {items.map((item) => (
           <div
             key={item.id}
             className="rounded border border-hairline bg-base px-3 py-2 text-center"
           >
             <span
-              className="mx-auto mb-1 block h-1 w-4 rounded-full"
+              className="mx-auto mb-1 block h-1.5 w-4 rounded-full"
               style={{ backgroundColor: item.color }}
               aria-hidden
             />
@@ -337,11 +332,10 @@ function AssetPickerModal({
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/api/v1/assets?q=${encodeURIComponent(q)}&limit=30`);
+        const res = await fetch(`${API_BASE}/api/v1/assets?q=${encodeURIComponent(q)}&limit=40`);
         if (res.ok) {
           const data = await res.json();
           if (data.assets && data.assets.length > 0) {
-            // Deduplicate with local list
             const combined = [...localMatches];
             for (const item of data.assets) {
               if (!combined.some((c) => c.mint === item.mint || c.symbol === item.symbol)) {
@@ -409,6 +403,8 @@ function AssetPickerModal({
           ) : (
             searchResults.map((asset) => {
               const isSelected = asset.symbol === currentSymbol;
+              const assetDotColor = getInitialTokenColor(asset.symbol);
+
               return (
                 <button
                   key={asset.mint || asset.symbol}
@@ -425,6 +421,11 @@ function AssetPickerModal({
                   )}
                 >
                   <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className="h-2 w-2 rounded-full shrink-0"
+                      style={{ backgroundColor: assetDotColor }}
+                      aria-hidden
+                    />
                     {asset.iconUrl ? (
                       <img
                         src={asset.iconUrl}
@@ -482,7 +483,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
   const { wallet, walletName } = useWallet();
   const { setSession } = useTenderSession();
 
-  // Dynamic election items
+  // Dynamic election items with derived brand colors
   const [items, setItems] = useState<ElectionItem[]>([
     {
       id: "item-1",
@@ -490,7 +491,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
       name: "S&P 500 ETF",
       mint: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
       percent: 60,
-      color: COLOR_PALETTE[0],
+      color: getInitialTokenColor("SPYx"),
       iconUrl: DEFAULT_FEATURED_ASSETS[0].iconUrl,
     },
     {
@@ -499,7 +500,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
       name: "USD Coin",
       mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
       percent: 30,
-      color: COLOR_PALETTE[1],
+      color: getInitialTokenColor("USDC"),
       iconUrl: DEFAULT_FEATURED_ASSETS[1].iconUrl,
     },
     {
@@ -508,7 +509,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
       name: "Gold International",
       mint: "Xs64245JybP9rgXJZJZcxKKRwqJnRpGKzoKtVNcyhoS",
       percent: 10,
-      color: COLOR_PALETTE[2],
+      color: getInitialTokenColor("GLDx"),
       iconUrl: DEFAULT_FEATURED_ASSETS[2].iconUrl,
     },
   ]);
@@ -516,7 +517,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
   const [availableAssets, setAvailableAssets] = useState<AssetOption[]>(DEFAULT_FEATURED_ASSETS);
   const [activePickerIndex, setActivePickerIndex] = useState<number | null>(null);
 
-  // Load catalog on mount
+  // Load catalog on mount & extract colors for any non-canonical items
   useEffect(() => {
     async function fetchAssets() {
       try {
@@ -537,6 +538,20 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
     }
     fetchAssets();
   }, []);
+
+  // Dynamically resolve image colors on mount or whenever item icons change
+  useEffect(() => {
+    items.forEach(async (item) => {
+      if (item.iconUrl) {
+        const extracted = await extractDominantColorFromImage(item.iconUrl, item.symbol);
+        if (extracted && extracted !== item.color) {
+          setItems((prev) =>
+            prev.map((it) => (it.id === item.id ? { ...it, color: extracted } : it))
+          );
+        }
+      }
+    });
+  }, [items.map((i) => i.iconUrl).join(",")]);
 
   const total = items.reduce((sum, item) => sum + item.percent, 0);
   const validTotal = total === 100;
@@ -568,7 +583,9 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
     );
   };
 
-  const updateItemAsset = (index: number, newAsset: AssetOption) => {
+  const updateItemAsset = async (index: number, newAsset: AssetOption) => {
+    const initialColor = getInitialTokenColor(newAsset.symbol);
+
     setItems((prev) => {
       const copy = [...prev];
       copy[index] = {
@@ -577,29 +594,50 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
         name: newAsset.name,
         mint: newAsset.mint,
         iconUrl: newAsset.iconUrl,
+        color: initialColor,
       };
       return copy;
     });
+
+    if (newAsset.iconUrl) {
+      const extractedColor = await extractDominantColorFromImage(newAsset.iconUrl, newAsset.symbol);
+      setItems((prev) => {
+        const copy = [...prev];
+        if (copy[index]) {
+          copy[index] = { ...copy[index], color: extractedColor };
+        }
+        return copy;
+      });
+    }
   };
 
-  const addAssetItem = () => {
-    if (items.length >= 6) return;
+  const addAssetItem = async () => {
+    if (items.length >= MAX_ELECTION_ASSETS) return;
     const existingSymbols = new Set(items.map((i) => i.symbol));
     const nextAsset = availableAssets.find((a) => !existingSymbols.has(a.symbol)) || availableAssets[3];
-    const nextColor = COLOR_PALETTE[items.length % COLOR_PALETTE.length];
+    const initialColor = getInitialTokenColor(nextAsset.symbol);
+
+    const newItemId = `item-${Date.now()}`;
 
     setItems((prev) => [
       ...prev,
       {
-        id: `item-${Date.now()}`,
+        id: newItemId,
         symbol: nextAsset.symbol,
         name: nextAsset.name,
         mint: nextAsset.mint,
         percent: 0,
-        color: nextColor,
+        color: initialColor,
         iconUrl: nextAsset.iconUrl,
       },
     ]);
+
+    if (nextAsset.iconUrl) {
+      const extracted = await extractDominantColorFromImage(nextAsset.iconUrl, nextAsset.symbol);
+      setItems((prev) =>
+        prev.map((it) => (it.id === newItemId ? { ...it, color: extracted } : it))
+      );
+    }
   };
 
   const removeItem = (id: string) => {
@@ -652,7 +690,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
 
       setDone(true);
     } catch {
-      // Error is caught by register.isError in UI
+      // Handled by UI error display
     }
   };
 
@@ -802,80 +840,83 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                     </div>
 
                     <div className="space-y-4 rounded border border-hairline bg-base p-5">
-                      {items.map((item, index) => (
-                        <div key={item.id} className="space-y-2 border-b border-hairline/60 pb-3 last:border-0 last:pb-0">
-                          <div className="flex items-center justify-between">
-                            {/* Asset Selector Trigger */}
-                            <button
-                              type="button"
-                              onClick={() => setActivePickerIndex(index)}
-                              className="group inline-flex items-center gap-2 rounded border border-hairline bg-card2 px-2.5 py-1.5 hover:border-red transition-colors"
-                            >
-                              <span
-                                className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: item.color }}
-                                aria-hidden
-                              />
-                              {item.iconUrl ? (
-                                <img
-                                  src={item.iconUrl}
-                                  alt={item.symbol}
-                                  className="h-4 w-4 rounded-full object-cover shrink-0"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = "none";
-                                  }}
+                      <div className="max-h-[380px] overflow-y-auto space-y-4 pr-1">
+                        {items.map((item, index) => (
+                          <div key={item.id} className="space-y-2 border-b border-hairline/60 pb-3 last:border-0 last:pb-0">
+                            <div className="flex items-center justify-between">
+                              {/* Asset Selector Trigger with Image-Derived Dot */}
+                              <button
+                                type="button"
+                                onClick={() => setActivePickerIndex(index)}
+                                className="group inline-flex items-center gap-2 rounded border border-hairline bg-card2 px-2.5 py-1.5 hover:border-red transition-colors"
+                              >
+                                <span
+                                  className="h-2 w-2 rounded-full shrink-0 transition-colors"
+                                  style={{ backgroundColor: item.color }}
+                                  aria-hidden
                                 />
-                              ) : null}
-                              <span className="font-mono text-xs font-bold text-ink uppercase">
-                                {item.symbol}
-                              </span>
-                              <span className="hidden sm:inline font-body text-[11px] text-muted2 truncate max-w-[120px]">
-                                {item.name}
-                              </span>
-                              <ChevronDown className="h-3.5 w-3.5 text-muted2 group-hover:text-red transition-colors" />
-                            </button>
+                                {item.iconUrl ? (
+                                  <img
+                                    src={item.iconUrl}
+                                    alt={item.symbol}
+                                    className="h-4 w-4 rounded-full object-cover shrink-0"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = "none";
+                                    }}
+                                  />
+                                ) : null}
+                                <span className="font-mono text-xs font-bold text-ink uppercase">
+                                  {item.symbol}
+                                </span>
+                                <span className="hidden sm:inline font-body text-[11px] text-muted2 truncate max-w-[120px]">
+                                  {item.name}
+                                </span>
+                                <ChevronDown className="h-3.5 w-3.5 text-muted2 group-hover:text-red transition-colors" />
+                              </button>
 
-                            {/* Percentage display + Delete button */}
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-xs font-semibold text-secondary2">
-                                {item.percent}%
-                              </span>
-                              {items.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeItem(item.id)}
-                                  className="text-muted2 hover:text-red p-1 transition-colors"
-                                  title="Remove asset"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              )}
+                              {/* Percentage display + Delete button */}
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-xs font-semibold text-secondary2">
+                                  {item.percent}%
+                                </span>
+                                {items.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeItem(item.id)}
+                                    className="text-muted2 hover:text-red p-1 transition-colors"
+                                    title="Remove asset"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
+
+                            {/* Percentage Slider with Dynamic Asset Accent */}
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={item.percent}
+                              aria-label={`${item.symbol} percentage`}
+                              onChange={(e) => updateItemPercent(item.id, Number(e.target.value))}
+                              style={{ accentColor: item.color }}
+                              className="h-1 w-full cursor-pointer appearance-none rounded bg-hairline"
+                            />
                           </div>
+                        ))}
+                      </div>
 
-                          {/* Percentage Slider */}
-                          <input
-                            type="range"
-                            min={0}
-                            max={100}
-                            step={5}
-                            value={item.percent}
-                            aria-label={`${item.symbol} percentage`}
-                            onChange={(e) => updateItemPercent(item.id, Number(e.target.value))}
-                            className="h-1 w-full cursor-pointer appearance-none rounded bg-hairline accent-[#E8322A]"
-                          />
-                        </div>
-                      ))}
-
-                      {/* Add Asset Button */}
-                      {items.length < 6 && (
+                      {/* Add Asset Button (Up to 10 assets) */}
+                      {items.length < MAX_ELECTION_ASSETS && (
                         <button
                           type="button"
                           onClick={addAssetItem}
                           className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-hairline py-2.5 font-mono text-xs uppercase tracking-[0.08em] text-muted2 hover:border-red hover:text-ink transition-colors"
                         >
                           <Plus className="h-3.5 w-3.5 text-red" />
-                          Add Receive Asset ({items.length}/6)
+                          Add Receive Asset ({items.length}/{MAX_ELECTION_ASSETS})
                         </button>
                       )}
                     </div>
