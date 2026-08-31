@@ -14,20 +14,20 @@ import type { HeroStatData } from "@/views/evolve-hero/types";
 
 const STATS: HeroStatData[] = [
   {
-    lines: ["2,400+", "Handles claimed"],
+    lines: ["340+", "Handles claimed"],
     x: "87.5%",
     y: "27.125%",
     width: "7.125rem",
   },
   {
-    lines: ["$38M+ Settled onchain"],
+    lines: ["$860K+ Settled onchain"],
     x: "75%",
     xTablet: "87.5%",
     y: "52.25%",
     width: "7.125rem",
   },
   {
-    lines: ["120+", "Countries served"],
+    lines: ["70+", "Countries served"],
     x: "12.5%",
     y: "70.875%",
     width: "9.375rem",

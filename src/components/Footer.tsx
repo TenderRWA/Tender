@@ -18,21 +18,13 @@ function TelegramIcon({ className }: { className?: string }) {
   );
 }
 
-const NAVIGATE: { label: string; to: string }[] = [
-  { label: "Home", to: "/#top" },
+/** One lean row of real destinations — no placeholder or duplicate links. */
+const LINKS: { label: string; to: string }[] = [
   { label: "Work", to: "/work" },
   { label: "Services", to: "/services" },
   { label: "Pricing", to: "/pricing" },
-  { label: "Team", to: "/team" },
-  { label: "FAQ", to: "/#faq" },
   { label: "Contact", to: "/contact" },
-];
-
-/** Placeholder resources open the shared "coming soon" modal instead of dead "#" links. */
-const RESOURCES_SOON = ["Documentation", "Tender Backend Spec", "xStocks Universe", "Jupiter Routing"];
-const RESOURCES_LINKS: { label: string; to: string }[] = [
-  { label: "Terms of Service", to: "/contact#terms" },
-  { label: "Privacy", to: "/contact#terms" },
+  { label: "Terms", to: "/contact#terms" },
 ];
 
 export default function Footer() {
@@ -53,10 +45,9 @@ export default function Footer() {
 
   return (
     <footer className="bg-base/55 border-t border-hairline">
-      <div className="mx-auto max-w-container px-5 md:px-10 py-16 md:py-20">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
-          {/* Left block */}
-          <div className="md:col-span-5 flex flex-col gap-6">
+      <div className="mx-auto max-w-container px-5 md:px-10 py-12 md:py-16">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <img src="/logo.png" alt="TENDER logo" className="h-9 w-auto" />
               <span className="font-display font-semibold text-xl text-ink tracking-tight">
@@ -66,66 +57,26 @@ export default function Footer() {
             <p className="font-body text-secondary2 text-[17px] leading-relaxed max-w-sm">
               Get paid in the assets you'd rather hold.
             </p>
-            <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted2 leading-loose">
-              INFRANODES
-              <br />
-              SOLANA MAINNET-BETA
-              <br />
-              NON-CUSTODIAL
-            </p>
           </div>
 
-          {/* Link columns */}
-          <div className="md:col-span-7 grid grid-cols-2 gap-8">
-            <div>
-              <h4 className="font-mono text-xs uppercase tracking-[0.12em] text-muted2 mb-6">
-                Navigate
-              </h4>
-              <ul className="flex flex-col gap-3">
-                {NAVIGATE.map((l) => (
-                  <li key={l.label}>
-                    <button
-                      onClick={() => go(l.to)}
-                      className="font-body text-[15px] text-secondary2 hover:text-red transition-colors duration-150"
-                    >
-                      {l.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-mono text-xs uppercase tracking-[0.12em] text-muted2 mb-6">
-                Resources
-              </h4>
-              <ul className="flex flex-col gap-3">
-                {RESOURCES_SOON.map((label) => (
-                  <li key={label}>
-                    <button
-                      onClick={comingSoon.open}
-                      className="font-body text-[15px] text-secondary2 hover:text-red transition-colors duration-150"
-                    >
-                      {label}
-                    </button>
-                  </li>
-                ))}
-                {RESOURCES_LINKS.map((l) => (
-                  <li key={l.label}>
-                    <button
-                      onClick={() => go(l.to)}
-                      className="font-body text-[15px] text-secondary2 hover:text-red transition-colors duration-150"
-                    >
-                      {l.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          <nav aria-label="Footer">
+            <ul className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              {LINKS.map((l) => (
+                <li key={l.label}>
+                  <button
+                    onClick={() => go(l.to)}
+                    className="font-body text-[15px] text-secondary2 hover:text-red transition-colors duration-150"
+                  >
+                    {l.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-16 pt-8 border-t border-hairline flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+        <div className="mt-10 pt-8 border-t border-hairline flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <span className="font-mono text-xs uppercase tracking-[0.12em] text-muted2">
             © 2026 TENDER · Built by Infranodes
           </span>
