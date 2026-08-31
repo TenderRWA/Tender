@@ -308,9 +308,21 @@ function AssetPickerModal({
     if (isOpen) {
       setSearchTerm("");
       setSearchResults(allAvailableAssets);
+      document.body.style.overflow = "hidden";
+
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", onKey);
+
       setTimeout(() => inputRef.current?.focus(), 100);
+
+      return () => {
+        document.body.style.overflow = "";
+        window.removeEventListener("keydown", onKey);
+      };
     }
-  }, [isOpen, allAvailableAssets]);
+  }, [isOpen, allAvailableAssets, onClose]);
 
   useEffect(() => {
     if (!searchTerm.trim()) {
@@ -358,11 +370,19 @@ function AssetPickerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+      data-lenis-prevent="true"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
+        data-lenis-prevent="true"
+        onClick={(e) => e.stopPropagation()}
         className="w-full max-w-lg rounded border border-hairline bg-card2 p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between pb-4 border-b border-hairline">
@@ -375,7 +395,7 @@ function AssetPickerModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1.5 font-mono text-xs text-muted2 hover:bg-base hover:text-ink"
+            className="rounded p-1.5 font-mono text-xs text-muted2 hover:bg-base hover:text-ink transition-colors"
           >
             ✕
           </button>
@@ -395,7 +415,13 @@ function AssetPickerModal({
         </div>
 
         {/* Asset List */}
-        <div className="max-h-[320px] overflow-y-auto space-y-1 pr-1">
+        <div
+          data-lenis-prevent="true"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          className="max-h-[340px] overflow-y-auto overscroll-contain space-y-1 pr-1"
+          style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
+        >
           {searchResults.length === 0 ? (
             <div className="py-8 text-center font-mono text-xs text-muted2">
               {loading ? "Searching 714+ Solana xStocks..." : "No assets match your search"}
@@ -840,7 +866,13 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                     </div>
 
                     <div className="space-y-4 rounded border border-hairline bg-base p-5">
-                      <div className="max-h-[380px] overflow-y-auto space-y-4 pr-1">
+                      <div
+                        data-lenis-prevent="true"
+                        onWheel={(e) => e.stopPropagation()}
+                        onTouchMove={(e) => e.stopPropagation()}
+                        className="max-h-[380px] overflow-y-auto overscroll-contain space-y-4 pr-1"
+                        style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
+                      >
                         {items.map((item, index) => (
                           <div key={item.id} className="space-y-2 border-b border-hairline/60 pb-3 last:border-0 last:pb-0">
                             <div className="flex items-center justify-between">
