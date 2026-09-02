@@ -24,6 +24,7 @@ import type {
   InvoiceResponse,
   OwnerHandlesResponse,
   RegisterHandleResponse,
+  SettlementHistoryResponse,
   SolanaTokenInfo,
   UpdateElectionsResponse,
 } from "@/types/tender";
@@ -258,6 +259,28 @@ export const confirmSettlement = createServerFn({ method: "POST" })
       tenderFetch<ConfirmSettlementResponse>("/api/v1/settle/confirm", {
         method: "POST",
         body: data,
+      }),
+    ),
+  );
+
+export const getSettlementHistory = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      wallet: z.string().trim().optional(),
+      handle: z.string().trim().optional(),
+      limit: z.number().int().positive().max(100).optional(),
+      offset: z.number().int().min(0).optional(),
+    }),
+  )
+  .handler(({ data }): Promise<SettlementHistoryResponse> =>
+    proxy(() =>
+      tenderFetch<SettlementHistoryResponse>("/api/v1/settle/history", {
+        query: {
+          wallet: data.wallet || undefined,
+          handle: data.handle || undefined,
+          limit: data.limit,
+          offset: data.offset,
+        },
       }),
     ),
   );

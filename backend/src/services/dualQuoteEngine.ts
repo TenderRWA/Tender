@@ -80,6 +80,40 @@ export function parseTokenUnits(amountFormatted: string | number, decimals: numb
   return BigInt(combined).toString();
 }
 
+export function formatFriendlyQuoteError(tokenSymbol: string, rawError: string): string {
+  const errStr = (rawError || "").toLowerCase();
+
+  if (
+    errStr.includes("token_not_tradable") ||
+    errStr.includes("not tradable") ||
+    errStr.includes("no_swap_routes_found") ||
+    errStr.includes("no routes found")
+  ) {
+    return `${tokenSymbol} has no active liquidity on Solana DEX order books. Please choose another token or update this handle's election.`;
+  }
+
+  if (errStr.includes("insufficient") || errStr.includes("liquidity")) {
+    return `Insufficient market liquidity on Solana DEXes to settle ${tokenSymbol} at this amount.`;
+  }
+
+  if (errStr.includes("rate limit") || errStr.includes("429") || errStr.includes("too many requests")) {
+    return `DEX order book rate limit reached. Please wait a few seconds and try again.`;
+  }
+
+  if (errStr.includes("slippage")) {
+    return `Price impact or slippage exceeded for ${tokenSymbol}. Try a smaller amount or adjusting slippage.`;
+  }
+
+  const clean = rawError
+    .replace(/\{[^{}]*\}/g, "")
+    .replace(/HTTP (?:Error )?\d+/gi, "")
+    .replace(/Jupiter quote failed \(\d+\):?/gi, "")
+    .replace(/Relay quote failed \(\d+\):?/gi, "")
+    .trim();
+
+  return clean ? `${tokenSymbol}: ${clean}` : `Unable to find a settlement route for ${tokenSymbol}.`;
+}
+
 export async function getBestDualQuote(params: DualQuoteParams): Promise<DualQuoteResult> {
   const inToken = resolveSolanaToken(params.inputMint);
   const outToken = resolveSolanaToken(params.outputMint);
@@ -190,10 +224,11 @@ export async function getBestDualQuote(params: DualQuoteParams): Promise<DualQuo
     };
   }
 
-  // If both failed, throw error
+  // If both failed, throw clean friendly error
   if (!jupSummary.success && !relaySummary.success) {
+    const symbol = outToken?.symbol || "selected token";
     throw new Error(
-      `Both quote providers failed. Jupiter: ${jupSummary.error} | Relay: ${relaySummary.error}`
+      formatFriendlyQuoteError(symbol, `${jupSummary.error} | ${relaySummary.error}`)
     );
   }
 
@@ -266,23 +301,27 @@ export async function calculatePortfolioElectionQuotes(params: {
       const legAmountStr = legAmountBig.toString();
       const legAmountFormatted = formatTokenUnits(legAmountBig, inDecimals);
 
-      const quote = await getBestDualQuote({
-        inputMint: params.inputMint,
-        outputMint: leg.assetMint,
-        amount: legAmountStr,
-        userWallet: params.userWallet,
-        recipientWallet: params.recipientWallet,
-        slippageBps: params.slippageBps,
-      });
+      try {
+        const quote = await getBestDualQuote({
+          inputMint: params.inputMint,
+          outputMint: leg.assetMint,
+          amount: legAmountStr,
+          userWallet: params.userWallet,
+          recipientWallet: params.recipientWallet,
+          slippageBps: params.slippageBps,
+        });
 
-      return {
-        assetSymbol: leg.assetSymbol,
-        assetMint: leg.assetMint,
-        basisPoints: leg.basisPoints,
-        allocatedInAmount: legAmountStr,
-        allocatedInAmountFormatted: legAmountFormatted,
-        quote,
-      };
+        return {
+          assetSymbol: leg.assetSymbol,
+          assetMint: leg.assetMint,
+          basisPoints: leg.basisPoints,
+          allocatedInAmount: legAmountStr,
+          allocatedInAmountFormatted: legAmountFormatted,
+          quote,
+        };
+      } catch (err: any) {
+        throw new Error(formatFriendlyQuoteError(leg.assetSymbol, err.message));
+      }
     })
   );
 

@@ -170,6 +170,24 @@ export interface ConfirmSettlementResponse {
   recordedId: string | number | null;
 }
 
+export interface SettlementHistoryItem {
+  id: string | number;
+  signature: string;
+  senderWallet: string;
+  recipientHandle: string | null;
+  recipientWallet: string;
+  inputMint: string;
+  inputAmount: string;
+  outputBreakdown: Array<{ symbol: string; amount: string; mint?: string }>;
+  status: string;
+  createdAt: string;
+}
+
+export interface SettlementHistoryResponse {
+  settlements: SettlementHistoryItem[];
+  count: number;
+}
+
 // ── Invoices ───────────────────────────────────────────────────────────────
 
 export interface InvoiceResponse {

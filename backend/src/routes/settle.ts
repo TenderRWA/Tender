@@ -155,7 +155,7 @@ settleRouter.post("/election-quote", async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error("Error executing election quote:", err);
-    res.status(500).json({ error: "Portfolio election quote failed", details: err.message });
+    res.status(400).json({ error: err.message || "Portfolio election quote failed" });
   }
 });
 
@@ -228,5 +228,59 @@ settleRouter.post("/confirm", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("Error recording settlement confirmation:", err);
     res.status(500).json({ error: "Failed to record settlement", details: err.message });
+  }
+});
+
+// GET /api/v1/settle/history (Query on-chain settlement receipts)
+settleRouter.get("/history", async (req: Request, res: Response) => {
+  try {
+    const { wallet, handle, limit = "20", offset = "0" } = req.query;
+
+    let queryText = `
+      SELECT id, signature, sender_wallet, recipient_handle, recipient_wallet, input_mint, input_amount, output_breakdown, status, created_at
+      FROM settlements
+    `;
+    const params: any[] = [];
+    const conditions: string[] = [];
+
+    if (wallet && typeof wallet === "string" && wallet.trim().length > 0) {
+      params.push(wallet.trim());
+      conditions.push(`(sender_wallet = $${params.length} OR recipient_wallet = $${params.length})`);
+    }
+
+    if (handle && typeof handle === "string" && handle.trim().length > 0) {
+      params.push(handle.replace(/^@/, "").toLowerCase().trim());
+      conditions.push(`recipient_handle = $${params.length}`);
+    }
+
+    if (conditions.length > 0) {
+      queryText += ` WHERE ${conditions.join(" OR ")}`;
+    }
+
+    const limitNum = Math.min(parseInt(limit as string, 10) || 20, 100);
+    const offsetNum = parseInt(offset as string, 10) || 0;
+    queryText += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limitNum, offsetNum);
+
+    const result = await query(queryText, params);
+
+    res.json({
+      settlements: result.rows.map((row) => ({
+        id: row.id,
+        signature: row.signature,
+        senderWallet: row.sender_wallet,
+        recipientHandle: row.recipient_handle,
+        recipientWallet: row.recipient_wallet,
+        inputMint: row.input_mint,
+        inputAmount: row.input_amount,
+        outputBreakdown: row.output_breakdown,
+        status: row.status,
+        createdAt: row.created_at,
+      })),
+      count: result.rows.length,
+    });
+  } catch (err: any) {
+    console.error("Error fetching settlement history:", err);
+    res.status(500).json({ error: "Failed to fetch settlement history", details: err.message });
   }
 });

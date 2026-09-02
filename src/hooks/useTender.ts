@@ -11,6 +11,7 @@ import {
   getElectionQuote,
   getHandle,
   getHandlesByOwner,
+  getSettlementHistory,
   registerHandle,
   updateElections,
 } from "@/lib/tender-server-fns";
@@ -22,6 +23,7 @@ import type {
   HandleDetailsResponse,
   OwnerHandlesResponse,
   PortfolioQuoteLeg,
+  SettlementHistoryResponse,
   SolanaTokenInfo,
 } from "@/types/tender";
 
@@ -234,6 +236,33 @@ export function useSettlePortfolio() {
         signatures: results.map((r) => r.signature).filter((s): s is string => Boolean(s)),
       };
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tender", "settlement-history"] });
+    },
+  });
+}
+
+export function useSettlementHistory(params: {
+  wallet?: string | null;
+  handle?: string | null;
+  limit?: number;
+  offset?: number;
+} = {}) {
+  const cleanWallet = (params.wallet ?? "").trim();
+  const cleanHandleStr = (params.handle ?? "").trim().replace(/^@/, "").toLowerCase();
+
+  return useQuery<SettlementHistoryResponse>({
+    queryKey: ["tender", "settlement-history", cleanWallet, cleanHandleStr, params.limit, params.offset],
+    queryFn: () =>
+      getSettlementHistory({
+        data: {
+          wallet: cleanWallet || undefined,
+          handle: cleanHandleStr || undefined,
+          limit: params.limit,
+          offset: params.offset,
+        },
+      }),
+    staleTime: 15 * 1000,
   });
 }
 
