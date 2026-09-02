@@ -85,6 +85,12 @@ export interface UpdateElectionsResponse {
   message: string;
 }
 
+export interface OwnerHandlesResponse {
+  ownerWallet: string;
+  handles: string[];
+  count: number;
+}
+
 // ── Dual Provider & Settlement Types ───────────────────────────────────────
 
 export type QuoteProvider = "jupiter" | "relay";

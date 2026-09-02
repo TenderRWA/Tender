@@ -4,6 +4,25 @@ import { resolveSolanaToken } from "../lib/rwaTokens";
 
 export const handlesRouter = Router();
 
+// GET /api/v1/handles/owner/:wallet
+handlesRouter.get("/owner/:wallet", async (req: Request, res: Response) => {
+  try {
+    const wallet = req.params.wallet.trim();
+    const result = await query(
+      "SELECT handle, owner_wallet, metadata, created_at, updated_at FROM handles WHERE owner_wallet = $1 ORDER BY created_at DESC",
+      [wallet]
+    );
+    res.json({
+      ownerWallet: wallet,
+      handles: result.rows.map((r) => r.handle),
+      count: result.rows.length,
+    });
+  } catch (err: any) {
+    console.error("Error fetching handles by owner:", err);
+    res.status(500).json({ error: "Failed to fetch handles by owner", details: err.message });
+  }
+});
+
 // GET /api/v1/handles/:handle
 handlesRouter.get("/:handle", async (req: Request, res: Response) => {
   try {

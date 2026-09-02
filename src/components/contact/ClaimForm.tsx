@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useSearchParams } from "@/lib/router-compat";
+import { useNavigate, useSearchParams } from "@/lib/router-compat";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useComingSoon } from "@/components/ComingSoonModal";
@@ -501,15 +501,17 @@ const fieldVariants = {
 
 export default function ClaimForm({ embedded = false }: { embedded?: boolean }) {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [handle, setHandle] = useState("");
   const [checked, setChecked] = useState("");
   const [role, setRole] = useState<Role>(() => roleFromQuery(searchParams.get("role")));
   const [done, setDone] = useState(false);
+  const [claimedHandle, setClaimedHandle] = useState("");
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const comingSoon = useComingSoon();
   const { address, walletName } = useWallet();
   const wallet = address;
-  const { setSession } = useTenderSession();
+  const { setHandle: setSessionHandle } = useTenderSession();
 
   // Dynamic election items with derived brand colors
   const [items, setItems] = useState<ElectionItem[]>([
@@ -712,31 +714,22 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
         basisPoints: it.percent * 100,
       }));
 
+    const cleanHandle = handle.trim().toLowerCase();
+
     try {
       await register.mutateAsync({
-        handle: handle.trim().toLowerCase(),
+        handle: cleanHandle,
         ownerWallet: wallet,
         metadata: { role, submittedAt: new Date().toISOString() },
         elections,
       });
 
-      setSession({
-        handle: handle.trim().toLowerCase(),
-        walletAddress: wallet,
-        walletName,
-        elections: items
-          .filter((it) => it.percent > 0)
-          .map((it) => ({
-            symbol: it.symbol,
-            mint: it.mint,
-            basisPoints: it.percent * 100,
-            percentage: it.percent,
-          })),
-      });
-
+      // Auto-activate the newly claimed handle immediately in session
+      setSessionHandle(cleanHandle);
+      setClaimedHandle(cleanHandle);
       setDone(true);
-    } catch {
-      // Handled by UI error display
+    } catch (err) {
+      console.error("Handle registration failed:", err);
     }
   };
 
@@ -763,30 +756,79 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
                   animate={{ rotateY: 0, opacity: 1 }}
                   exit={{ rotateY: -8, opacity: 0 }}
                   transition={{ duration: 0.5, ease: EASE }}
-                  className="flex h-full flex-col justify-between gap-10 rounded border border-red-deep/60 bg-red p-8 md:p-12"
+                  className="flex h-full flex-col justify-between gap-8 rounded border border-hairline bg-card2 p-8 md:p-12 shadow-2xl relative overflow-hidden"
                 >
+                  <div className="absolute top-0 right-0 h-48 w-48 bg-red/10 rounded-full blur-3xl pointer-events-none" />
+
                   <div>
-                    <span className="mb-6 inline-block h-1.5 w-1.5 bg-red-deep" aria-hidden />
-                    <h3 className="font-display text-3xl font-medium leading-[1.1] tracking-[-0.02em] text-white md:text-4xl">
-                      Handle reserved.
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-success font-semibold">
+                        ACTIVE IN TERMINAL SESSION
+                      </span>
+                    </div>
+
+                    <h3 className="font-display text-3xl font-medium leading-[1.1] tracking-[-0.02em] text-ink md:text-4xl">
+                      @{claimedHandle || handle} claimed.
                       <br />
                       Election recorded.
                     </h3>
-                    <p className="mt-6 font-mono text-xs uppercase leading-relaxed tracking-[0.12em] text-red-deep">
-                      {summary}
+
+                    <p className="mt-3 font-body text-[14px] leading-relaxed text-secondary2">
+                      Your sovereign portfolio election is pinned to your wallet. Every incoming settlement converts atomically into your elected mix.
                     </p>
-                    <p className="mt-4 max-w-md font-body text-[15px] leading-[1.65] text-white/80">
-                      Your custom mix is pinned in the election registry. When mainnet-beta
-                      opens, this handle settles every incoming payment exactly as
-                      elected - no held balances, ever.
-                    </p>
+
+                    {/* Elected Portfolio Summary Chips */}
+                    <div className="mt-6 flex flex-wrap gap-2">
+                      {items
+                        .filter((it) => it.percent > 0)
+                        .map((it) => (
+                          <div
+                            key={it.id}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-base px-3 py-1 font-mono text-xs text-ink"
+                          >
+                            <span
+                              className="h-2 w-2 rounded-full shrink-0"
+                              style={{ backgroundColor: it.color }}
+                              aria-hidden
+                            />
+                            <span className="font-bold">{it.symbol}</span>
+                            <span className="text-secondary2">{it.percent}%</span>
+                          </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-6 rounded border border-hairline/80 bg-base/60 p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                        OWNER WALLET
+                      </p>
+                      <p className="font-mono text-xs text-ink break-all mt-0.5">
+                        {wallet}
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={comingSoon.open}
-                    className="inline-flex w-fit items-center gap-2 rounded bg-white px-8 py-4 font-body text-sm font-semibold uppercase tracking-[0.08em] text-red transition-transform duration-150 hover:-translate-y-0.5"
-                  >
-                    Talk to us on Telegram →
-                  </button>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-hairline">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/dashboard")}
+                      className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 rounded bg-red px-6 py-3.5 font-body text-sm font-semibold uppercase tracking-[0.08em] text-white transition-all duration-150 hover:bg-red-hover hover:-translate-y-0.5 shadow-md"
+                    >
+                      Open Terminal Dashboard →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDone(false);
+                        setHandle("");
+                        setChecked("");
+                        setClaimedHandle("");
+                      }}
+                      className="w-full sm:w-auto inline-flex items-center justify-center rounded border border-hairline bg-base px-5 py-3.5 font-mono text-xs uppercase tracking-[0.08em] text-secondary2 hover:text-ink hover:border-red transition-colors"
+                    >
+                      Claim Another
+                    </button>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.form

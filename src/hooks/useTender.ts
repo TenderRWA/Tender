@@ -10,6 +10,7 @@ import {
   getAssets,
   getElectionQuote,
   getHandle,
+  getHandlesByOwner,
   registerHandle,
   updateElections,
 } from "@/lib/tender-server-fns";
@@ -19,6 +20,7 @@ import type {
   ElectionQuoteResponse,
   HandleAvailability,
   HandleDetailsResponse,
+  OwnerHandlesResponse,
   PortfolioQuoteLeg,
   SolanaTokenInfo,
 } from "@/types/tender";
@@ -76,6 +78,16 @@ export function useHandleAvailability(handle: string, enabled = true) {
   });
 }
 
+export function useOwnerHandles(wallet: string | null | undefined) {
+  const clean = (wallet ?? "").trim();
+  return useQuery<OwnerHandlesResponse>({
+    queryKey: ["tender", "owner-handles", clean],
+    queryFn: () => getHandlesByOwner({ data: { wallet: clean } }),
+    enabled: clean.length >= 32,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useRegisterHandle() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -90,6 +102,7 @@ export function useRegisterHandle() {
       const clean = cleanHandle(variables.handle);
       queryClient.invalidateQueries({ queryKey: ["tender", "handle", clean] });
       queryClient.invalidateQueries({ queryKey: ["tender", "handle-availability", clean] });
+      queryClient.invalidateQueries({ queryKey: ["tender", "owner-handles", variables.ownerWallet] });
     },
   });
 }

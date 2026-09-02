@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-
+import { useNavigate } from "@/lib/router-compat";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
-import { useHandleAvailability } from "@/hooks/useTender";
+import { useHandleAvailability, useOwnerHandles } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
+import { Check, Plus, ChevronDown, Sparkles } from "lucide-react";
 
 type Tone = "success" | "warning" | "red" | "muted";
 
@@ -21,35 +22,38 @@ const TEXT: Record<Tone, string> = {
   muted: "text-muted2",
 };
 
-/**
- * Terminal identity controls, rendered inside the site navbar on /dashboard.
- *
- * Per the integration spec the wallet is the identity: writes carry
- * `ownerWallet`, and the API 403s when it does not match the handle's owner
- * (backend/src/routes/handles.ts). There is no reverse lookup from wallet to
- * handle, so the handle is still typed — but it is resolved against
- * GET /api/v1/handles/:handle as you type and checked against the connected
- * wallet, so a mismatch shows here rather than surfacing as a failed save.
- */
 export default function TerminalControls() {
   const { handle, setHandle } = useTenderSession();
   const { address } = useWallet();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualHandle, setManualHandle] = useState("");
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  const { data: ownerData } = useOwnerHandles(address);
+  const ownedHandles = ownerData?.handles || [];
+
+  // Auto-activate the first owned handle when wallet connects if no handle or mismatch
+  useEffect(() => {
+    if (address && ownedHandles.length > 0) {
+      if (!handle || !ownedHandles.includes(handle)) {
+        setHandle(ownedHandles[0]);
+      }
+    }
+  }, [address, ownedHandles, handle, setHandle]);
 
   const { data: availability, isFetching } = useHandleAvailability(handle);
   const registered = availability?.registered ?? false;
   const owner = availability?.details?.ownerWallet;
   const isOwner = Boolean(owner && address && owner === address);
 
-  // useHandleAvailability only queries at 3+ characters; say so rather than
-  // reporting an unchecked handle as unregistered.
   const tooShort = handle.length > 0 && handle.length < 3;
 
   const status: { tone: Tone; label: string; hint: string } = !handle
-    ? { tone: "warning", label: "SET HANDLE", hint: "Enter the handle this terminal should act as." }
+    ? { tone: "warning", label: "NO HANDLE", hint: "Claim or select a handle to activate this terminal." }
     : tooShort
-      ? { tone: "muted", label: `@${handle}`, hint: "Keep typing — checked from 3 characters." }
+      ? { tone: "muted", label: `@${handle}`, hint: "Resolving handle…" }
       : isFetching
         ? { tone: "muted", label: `@${handle}`, hint: "Resolving on the rail…" }
         : !registered
@@ -62,7 +66,7 @@ export default function TerminalControls() {
             ? {
                 tone: "warning",
                 label: `@${handle}`,
-                hint: "Connect the owner wallet to enable writes.",
+                hint: "Connect the owner wallet to enable settlement writes.",
               }
             : isOwner
               ? {
@@ -103,33 +107,140 @@ export default function TerminalControls() {
           className="inline-flex items-center gap-2 rounded-full border border-hairline/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary2 transition-colors duration-150 hover:border-red hover:text-foreground"
         >
           <span className={`h-1.5 w-1.5 rounded-full ${DOT[status.tone]}`} aria-hidden />
-          <span className="max-w-[12ch] truncate">{status.label}</span>
+          <span className="max-w-[14ch] truncate">{status.label}</span>
+          <ChevronDown className="h-3 w-3 text-muted2" />
         </button>
 
         {open && (
-          <div className="glass absolute right-0 top-full z-10 mt-2 w-72 rounded-xl p-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-                HANDLE
-              </span>
-              <input
-                value={handle}
-                onChange={(e) => setHandle(e.target.value)}
-                placeholder="mira"
-                autoFocus
-                aria-label="Your TENDER handle"
-                className="glass-soft w-full rounded-lg px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted2 transition-all duration-150 focus:border-red focus:ring-2 focus:ring-red/25 focus:outline-none"
-              />
-            </label>
+          <div
+            data-lenis-prevent="true"
+            className="glass absolute right-0 top-full z-20 mt-2 w-80 rounded-xl p-4 shadow-2xl border border-hairline"
+          >
+            {/* Wallet Owned Handles Section */}
+            {address && ownedHandles.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-hairline">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                    Your Handles ({ownedHandles.length})
+                  </span>
+                  <span className="font-mono text-[9px] text-success font-medium">● CONNECTED</span>
+                </div>
 
-            <p className={`mt-2.5 font-body text-[11px] leading-snug ${TEXT[status.tone]}`}>
-              {status.hint}
-            </p>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {ownedHandles.map((h) => {
+                    const isActive = handle === h;
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => {
+                          setHandle(h);
+                          setOpen(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-mono text-xs transition-colors ${
+                          isActive
+                            ? "bg-red/15 border border-red/30 text-ink font-semibold"
+                            : "hover:bg-base text-secondary2 hover:text-ink border border-transparent"
+                        }`}
+                      >
+                        <span>@{h}</span>
+                        {isActive ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-red font-medium">
+                            <Check className="h-3.5 w-3.5" /> ACTIVE
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted2">Switch</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-            {registered && owner && (
-              <p className="mt-2 font-mono text-[10px] tracking-[0.06em] text-muted2 break-all">
-                OWNER {owner.slice(0, 6)}…{owner.slice(-4)}
-              </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate("/dashboard/claim");
+                  }}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-hairline py-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted2 hover:border-red hover:text-ink transition-colors"
+                >
+                  <Plus className="h-3 w-3 text-red" />
+                  Claim New Handle
+                </button>
+              </div>
+            ) : address ? (
+              <div className="space-y-3 text-center py-2">
+                <p className="font-body text-xs text-secondary2">
+                  No handles registered to this wallet yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate("/dashboard/claim");
+                  }}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded bg-red py-2 font-body text-xs font-semibold uppercase tracking-[0.08em] text-white hover:bg-red-hover transition-colors"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Claim a Handle
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-2 space-y-2">
+                <p className="font-body text-xs text-muted2">
+                  Connect your wallet to auto-load your handles.
+                </p>
+              </div>
+            )}
+
+            {/* Manual Handle Override Toggle */}
+            <div className="mt-3 pt-3 border-t border-hairline/60">
+              {!showManualInput ? (
+                <button
+                  type="button"
+                  onClick={() => setShowManualInput(true)}
+                  className="w-full text-left font-mono text-[10px] uppercase tracking-[0.1em] text-muted2 hover:text-ink transition-colors"
+                >
+                  + Enter custom handle manually
+                </button>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (manualHandle.trim()) {
+                      setHandle(manualHandle.trim());
+                      setOpen(false);
+                      setShowManualInput(false);
+                    }
+                  }}
+                  className="space-y-2"
+                >
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. alice"
+                      value={manualHandle}
+                      onChange={(e) => setManualHandle(e.target.value)}
+                      className="glass-soft flex-1 rounded px-2.5 py-1.5 font-mono text-xs text-foreground placeholder:text-muted2 focus:border-red focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded bg-base border border-hairline px-3 py-1.5 font-mono text-xs text-ink hover:border-red"
+                    >
+                      Set
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* Active Handle Status Pill */}
+            {handle && (
+              <div className="mt-2.5 pt-2 border-t border-hairline/40">
+                <p className={`font-body text-[10px] leading-snug ${TEXT[status.tone]}`}>
+                  {status.hint}
+                </p>
+              </div>
             )}
           </div>
         )}

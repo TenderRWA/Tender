@@ -22,6 +22,7 @@ import type {
   HandleAvailability,
   HandleDetailsResponse,
   InvoiceResponse,
+  OwnerHandlesResponse,
   RegisterHandleResponse,
   SolanaTokenInfo,
   UpdateElectionsResponse,
@@ -127,6 +128,14 @@ export const checkHandle = createServerFn({ method: "GET" })
       throw err instanceof TenderApiError ? new Error(err.message) : err;
     }
   });
+
+export const getHandlesByOwner = createServerFn({ method: "GET" })
+  .validator(z.object({ wallet: z.string().trim().min(32) }))
+  .handler(({ data }): Promise<OwnerHandlesResponse> =>
+    proxy(() =>
+      tenderFetch<OwnerHandlesResponse>(`/api/v1/handles/owner/${encodeURIComponent(data.wallet)}`)
+    ),
+  );
 
 export const registerHandle = createServerFn({ method: "POST" })
   .validator(
