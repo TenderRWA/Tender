@@ -15,12 +15,14 @@ import ModulePage from "@/components/dashboard/ModulePage";
 import StatCard from "@/components/dashboard/StatCard";
 import DashTable, { DashRow, DashCell, StatusPill } from "@/components/dashboard/DashTable";
 import WalletModal from "@/components/wallet/WalletModal";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   usePendingSettlements,
   useInvoices,
   useElectionQuote,
   useSettlePortfolio,
   useConfirmPendingSettlement,
+  type SettlementLegResult,
 } from "@/hooks/useTender";
 import type { PendingSettlementRecord } from "@/types/tender";
 import { useTenderSession } from "@/lib/tender-session";
@@ -389,11 +391,13 @@ function SettlementSignModal({
   onClose: () => void;
   onOpenWallet: () => void;
 }) {
+  const queryClient = useQueryClient();
   const { address: wallet } = useWallet();
   const settle = useSettlePortfolio();
   const confirm = useConfirmPendingSettlement();
 
   const [confirmedTx, setConfirmedTx] = useState<string | null>(null);
+  const [completedLegs, setCompletedLegs] = useState<SettlementLegResult[] | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
 
   // Quote the transaction
@@ -426,11 +430,13 @@ function SettlementSignModal({
         onSuccess: (result) => {
           const sig = result.signatures[0] || "confirmed";
           setConfirmedTx(sig);
+          setCompletedLegs(result.legs);
           confirm.mutate({
             id: settlement.id,
             signature: sig,
             payerWallet: wallet,
           });
+          queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
         },
         onError: (err) => {
           setModalError(err.message || "Failed to settle transaction");
@@ -481,22 +487,10 @@ function SettlementSignModal({
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl glass-soft border border-hairline/80 space-y-2 text-left">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-muted2">Transaction Hash</span>
-                <a
-                  href={`https://solscan.io/tx/${confirmedTx}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-success hover:underline flex items-center gap-1 font-semibold"
-                >
-                  <span>{truncate(confirmedTx, 12)}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
+            <div className="p-4 rounded-2xl glass-soft border border-hairline/80 space-y-3 text-left">
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="text-muted2">Recipient</span>
-                <span className="text-foreground">@{settlement.recipientHandle}</span>
+                <span className="text-foreground font-semibold">@{settlement.recipientHandle}</span>
               </div>
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="text-muted2">Settled Amount</span>
@@ -504,11 +498,53 @@ function SettlementSignModal({
                   {formatAmount(settlement.inputAmount)} {settlement.inputToken}
                 </span>
               </div>
+
+              {completedLegs && completedLegs.length > 0 ? (
+                <div className="pt-2 border-t border-hairline/60 space-y-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted2 block">
+                    Executed Portfolio Legs
+                  </span>
+                  {completedLegs.map((leg, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-foreground font-medium">{leg.symbol}</span>
+                      {leg.signature ? (
+                        <a
+                          href={`https://solscan.io/tx/${leg.signature}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-success hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <span>{truncate(leg.signature, 10)}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <span className="text-muted2 text-[11px]">{leg.skippedReason || "Skipped"}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs font-mono pt-2 border-t border-hairline/60">
+                  <span className="text-muted2">Transaction Hash</span>
+                  <a
+                    href={`https://solscan.io/tx/${confirmedTx}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-success hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <span>{truncate(confirmedTx, 12)}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
             </div>
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
+                onClose();
+              }}
               className="w-full py-3.5 rounded-xl bg-foreground text-background font-body font-semibold text-xs uppercase tracking-[0.1em] hover:bg-foreground/90 transition-all cursor-pointer"
             >
               Close Receipt
