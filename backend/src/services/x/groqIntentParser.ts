@@ -1,7 +1,7 @@
 import Groq from "groq-sdk";
 import { config } from "../../config";
 
-export type BotAction = "send" | "quote" | "election" | "help" | "unrecognized";
+export type BotAction = "send" | "quote" | "election" | "invoice" | "help" | "unrecognized";
 
 export interface ParsedBotIntent {
   action: BotAction;
@@ -28,16 +28,27 @@ Classify the user's message into one of these actions:
    - "@TenderRWABot quote 100 USDC for @whoknows" -> action: "quote", target: "@whoknows", amount: 100, token: "USDC"
    - "how much is 50 usdc settled to @mira?" -> action: "quote", target: "@mira", amount: 50, token: "USDC"
 
-3. "help": Asking for help, available commands, or how TENDER works.
+3. "election": Asking to view or inspect a handle's portfolio mix, allocations, or elections.
+   Examples:
+   - "@TenderRWABot mix @whoknows" -> action: "election", target: "@whoknows"
+   - "@TenderRWABot election @nothipposol" -> action: "election", target: "@nothipposol"
+   - "show portfolio for @alex" -> action: "election", target: "@alex"
+
+4. "invoice": Creating or requesting an invoice from a payer.
+   Examples:
+   - "@TenderRWABot invoice @client 250 USDC for audit" -> action: "invoice", target: "@client", amount: 250, token: "USDC", memo: "audit"
+   - "@TenderRWABot request 100 USDC from @partner" -> action: "invoice", target: "@partner", amount: 100, token: "USDC"
+
+5. "help": Asking for help, available commands, or how TENDER works.
    Examples:
    - "@TenderRWABot help" -> action: "help"
    - "what can you do?" -> action: "help"
 
-4. "unrecognized": Casual chat, greetings, statements, or unsupported intents.
+6. "unrecognized": Casual chat, greetings, statements, or unsupported intents.
 
 Return ONLY a valid JSON object matching this schema:
 {
-  "action": "send" | "quote" | "help" | "unrecognized",
+  "action": "send" | "quote" | "election" | "invoice" | "help" | "unrecognized",
   "target": string | null,
   "amount": number | null,
   "token": string | null,
