@@ -32,3 +32,7 @@ cockpit/wallet.json
 # Testing & Caches
 coverage/
 .turbo/
+
+# Docs
+technical-docs/
+X_DEVELOPER_USE_CASE.txt
