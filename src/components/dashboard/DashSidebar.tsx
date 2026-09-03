@@ -56,16 +56,16 @@ export default function DashSidebar() {
         </ul>
 
         {xData?.account && (
-          <div className="mt-3 p-3 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center gap-2.5 shadow-sm">
-            <div className="w-7 h-7 rounded-lg bg-black/50 border border-white/10 flex items-center justify-center font-bold text-xs text-white">
+          <div className="mt-3 p-3 rounded-2xl glass glass-soft border border-hairline/80 flex items-center gap-2.5 shadow-xs">
+            <div className="w-7 h-7 rounded-lg bg-base border border-hairline flex items-center justify-center font-black text-xs text-foreground shrink-0 shadow-2xs">
               𝕏
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-white truncate">
+              <div className="text-xs font-mono font-semibold text-foreground truncate">
                 @{xData.account.xUsername}
               </div>
-              <div className="text-[10px] text-emerald-400 flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+              <div className="text-[10px] font-mono uppercase tracking-[0.1em] text-success flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                 Verified Identity
               </div>
             </div>
@@ -97,6 +97,23 @@ export default function DashSidebar() {
           ))}
         </ul>
       </nav>
+
+      {xData?.account && (
+        <div className="lg:hidden w-full glass rounded-xl px-3 py-2 flex items-center justify-between border border-hairline/80">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-5 h-5 rounded-md bg-base border border-hairline flex items-center justify-center font-black text-[10px] text-foreground shrink-0 shadow-2xs">
+              𝕏
+            </div>
+            <span className="text-xs font-mono font-semibold text-foreground truncate">
+              @{xData.account.xUsername}
+            </span>
+          </div>
+          <span className="text-[10px] font-mono uppercase tracking-[0.1em] text-success flex items-center gap-1 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+            Verified
+          </span>
+        </div>
+      )}
     </>
   );
 }
