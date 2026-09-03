@@ -118,25 +118,80 @@ botRouter.get("/status", async (_req: Request, res: Response) => {
 // GET /api/v1/bot/pending — List pending settlements initiated via bot/X
 botRouter.get("/pending", async (req: Request, res: Response) => {
   try {
-    const { handle, status = "pending", limit = "20" } = req.query;
+    const { handle, status, limit = "50" } = req.query;
 
-    let queryText = "SELECT * FROM pending_settlements WHERE status = $1";
-    const params: any[] = [status];
+    let queryText = "SELECT * FROM pending_settlements WHERE 1=1";
+    const params: any[] = [];
+
+    if (status && status !== "all") {
+      params.push(status);
+      queryText += ` AND status = $${params.length}`;
+    }
 
     if (handle && typeof handle === "string") {
-      params.push(handle.replace(/^@/, "").toLowerCase());
-      queryText += ` AND recipient_handle = $${params.length}`;
+      const cleanH = handle.replace(/^@/, "").toLowerCase().trim();
+      params.push(cleanH);
+      queryText += ` AND (LOWER(recipient_handle) = $${params.length} OR LOWER(author_x_handle) = $${params.length})`;
     }
 
     queryText += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
-    params.push(parseInt(limit as string, 10) || 20);
+    params.push(parseInt(limit as string, 10) || 50);
 
     const result = await query(queryText, params);
+    const pendingSettlements = (result.rows || []).map((row: any) => ({
+      id: String(row.id),
+      sourceRef: row.source_ref,
+      authorXId: row.author_x_id,
+      authorXHandle: row.author_x_handle,
+      recipientHandle: row.recipient_handle,
+      recipientWallet: row.recipient_wallet,
+      inputToken: row.input_token || "USDC",
+      inputAmount: String(row.input_amount),
+      portfolioSummary: row.portfolio_summary,
+      tweetUrl: row.tweet_url,
+      status: row.status,
+      signature: row.signature,
+      settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : undefined,
+      createdAt: new Date(row.created_at).toISOString(),
+    }));
+
     res.json({
-      pendingSettlements: result.rows || [],
-      count: result.rows?.length || 0,
+      pendingSettlements,
+      count: pendingSettlements.length,
     });
   } catch (err: any) {
+    console.error("[Bot Pending] Error:", err);
     res.status(500).json({ error: "Failed to fetch pending settlements", details: err.message });
+  }
+});
+
+// POST /api/v1/bot/pending/:id/confirm - Mark pending settlement as confirmed on-chain
+botRouter.post("/pending/:id/confirm", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { signature } = req.body;
+
+    if (!signature) {
+      res.status(400).json({ error: "signature is required" });
+      return;
+    }
+
+    const result = await query(
+      `UPDATE pending_settlements
+       SET status = 'completed', signature = $1, settled_at = NOW(), updated_at = NOW()
+       WHERE id = $2 OR source_ref = $2
+       RETURNING *`,
+      [signature, id]
+    );
+
+    if (!result.rows || result.rows.length === 0) {
+      res.status(404).json({ error: "Pending settlement not found" });
+      return;
+    }
+
+    res.json({ success: true, settlement: result.rows[0] });
+  } catch (err: any) {
+    console.error("[Bot Pending Confirm] Error:", err);
+    res.status(500).json({ error: "Failed to confirm pending settlement", details: err.message });
   }
 });
