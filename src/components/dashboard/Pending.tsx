@@ -31,9 +31,17 @@ const truncate = (val: string, len = 10) =>
 
 const formatAmount = (amt: string | number) => {
   const num = typeof amt === "number" ? amt : parseFloat(String(amt)) || 0;
+  if (num === 0) return "0.00";
+  if (num >= 1) {
+    return num.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    });
+  }
+  // Fractional amounts < 1 (e.g. 0.005 SOL, 0.0009 SOL)
   return num.toLocaleString(undefined, {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 6,
   });
 };
 
