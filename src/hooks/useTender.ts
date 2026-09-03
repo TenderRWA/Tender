@@ -16,6 +16,8 @@ import {
   getInvoices,
   getSettlementHistory,
   getXAccount,
+  getPendingSettlements,
+  confirmPendingSettlement,
   registerHandle,
   updateElections,
 } from "@/lib/tender-server-fns";
@@ -33,6 +35,7 @@ import type {
   SettlementHistoryResponse,
   SolanaTokenInfo,
   XAccountResponse,
+  PendingSettlementsResponse,
 } from "@/types/tender";
 
 /**
@@ -347,6 +350,40 @@ export function useXAccount(wallet?: string | null) {
     queryFn: () => getXAccount({ data: { wallet: cleanWallet } }),
     enabled: Boolean(cleanWallet && cleanWallet.length >= 32),
     staleTime: 30 * 1000,
+  });
+}
+
+// -- Bot Pending Settlements ------------------------------------------------
+
+export function usePendingSettlements(params: {
+  handle?: string;
+  status?: string;
+  limit?: number;
+}) {
+  const clean = params.handle ? cleanHandle(params.handle) : "";
+  return useQuery<PendingSettlementsResponse>({
+    queryKey: ["tender", "pending-settlements", clean, params.status || "all"],
+    queryFn: () =>
+      getPendingSettlements({
+        data: {
+          handle: clean || undefined,
+          status: params.status || undefined,
+          limit: params.limit,
+        },
+      }),
+    refetchInterval: 10_000,
+  });
+}
+
+export function useConfirmPendingSettlement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; signature: string; payerWallet?: string }) =>
+      confirmPendingSettlement({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
+      queryClient.invalidateQueries({ queryKey: ["tender", "settlement-history"] });
+    },
   });
 }
 
