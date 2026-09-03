@@ -62,10 +62,13 @@ async function refreshAndSave(stored: StoredBotToken): Promise<string> {
 }
 
 export async function getValidBotAccessToken(): Promise<string> {
-  const stored = (await getStoredToken()) ?? {
+  const fromDb = await getStoredToken();
+  const stored = fromDb ?? {
     accessToken: config.x.botAccessTokenSeed,
     refreshToken: config.x.botRefreshTokenSeed,
-    expiresAt: new Date(0),
+    // When seeding from fresh credentials in .env, assume valid for 90 mins rather than 0
+    // so we don't prematurely burn the single-use refresh token on the first second of boot
+    expiresAt: new Date(Date.now() + 90 * 60 * 1000),
   };
 
   // If token is still fresh and valid, return it directly
