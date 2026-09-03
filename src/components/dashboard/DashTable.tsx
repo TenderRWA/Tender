@@ -79,10 +79,33 @@ const DOT_STYLES: Record<PillTone, string> = {
   muted: "bg-muted2",
 };
 
-export function StatusPill({ tone, label }: { tone: PillTone; label: string }) {
+export function StatusPill(props: {
+  tone?: PillTone;
+  label?: string;
+  status?: string;
+}) {
+  let tone: PillTone = props.tone ?? "muted";
+  let label: string = props.label ?? "";
+
+  if (props.status) {
+    const s = props.status.toLowerCase();
+    if (s === "completed" || s === "paid" || s === "settled") {
+      tone = "success";
+      label = props.label || "SETTLED";
+    } else if (s === "pending" || s === "open") {
+      tone = "warning";
+      label = props.label || "PENDING";
+    } else if (s === "expired" || s === "cancelled" || s === "failed") {
+      tone = "muted";
+      label = props.label || s.toUpperCase();
+    } else {
+      label = props.label || props.status.toUpperCase();
+    }
+  }
+
   return (
     <span
-      className={`inline-flex items-center gap-2 border rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${PILL_STYLES[tone]}`}
+      className={`inline-flex items-center gap-2 border rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] whitespace-nowrap shrink-0 ${PILL_STYLES[tone]}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${DOT_STYLES[tone]}`} aria-hidden />
       {label}
