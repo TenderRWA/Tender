@@ -209,7 +209,14 @@ export function useSettlePortfolio() {
 
       const results: SettlementLegResult[] = [];
 
-      for (const leg of legs) {
+      for (let i = 0; i < legs.length; i++) {
+        const leg = legs[i];
+
+        // Give wallet extension popup time to cleanly settle between multi-leg signatures
+        if (i > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+
         const plan = await buildSettlementTx({
           data: {
             userWallet,
@@ -226,21 +233,30 @@ export function useSettlePortfolio() {
           continue;
         }
 
-        const signature = await signAndSendBase64(plan.base64Transaction);
+        try {
+          const signature = await signAndSendBase64(plan.base64Transaction);
 
-        await confirmSettlement({
-          data: {
-            signature,
-            senderWallet: userWallet,
-            recipientHandle: recipientHandle ? cleanHandle(recipientHandle) : undefined,
-            recipientWallet: quote.recipientWallet,
-            inputMint: quote.portfolioResult.inputToken?.mint ?? leg.quote.inputToken?.mint ?? "",
-            inputAmount: leg.allocatedInAmountFormatted || leg.allocatedInAmount,
-            outputBreakdown: [{ symbol: leg.assetSymbol, amount: leg.quote.outAmountFormatted }],
-          },
-        });
+          await confirmSettlement({
+            data: {
+              signature,
+              senderWallet: userWallet,
+              recipientHandle: recipientHandle ? cleanHandle(recipientHandle) : undefined,
+              recipientWallet: quote.recipientWallet,
+              inputMint: quote.portfolioResult.inputToken?.mint ?? leg.quote.inputToken?.mint ?? "",
+              inputAmount: leg.allocatedInAmountFormatted || leg.allocatedInAmount,
+              outputBreakdown: [{ symbol: leg.assetSymbol, amount: leg.quote.outAmountFormatted }],
+            },
+          });
 
-        results.push({ symbol: leg.assetSymbol, signature });
+          results.push({ symbol: leg.assetSymbol, signature });
+        } catch (err: any) {
+          console.error(`[useSettlePortfolio] Error executing leg ${leg.assetSymbol}:`, err);
+          // If at least one leg already executed on-chain, return the executed signatures rather than discarding progress
+          if (results.some((r) => r.signature)) {
+            break;
+          }
+          throw err;
+        }
       }
 
       return {
