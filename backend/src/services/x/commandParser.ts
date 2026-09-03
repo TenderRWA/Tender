@@ -60,8 +60,33 @@ export function parseFastCommand(text: string): ParsedBotIntent | null {
     }
   }
 
-  // 4. Election / Portfolio query: "election @nothipposol", "portfolio @whoknows", "elections for @nothipposol"
-  const electionRegex = /^(?:election|elections|portfolio|allocation|allocations|view|info|check)\s+(?:for\s+)?([@a-zA-Z0-9_-]{3,64})$/i;
+  // 4. Invoice / Request: "invoice @client 250 USDC for audit" or "request 100 USDC from @partner for design"
+  const invoiceRegex1 = /^(?:invoice)\s+([@a-zA-Z0-9_-]{3,64})\s+([0-9.]+)\s*([a-zA-Z0-9]+)?(?:\s+(?:for|memo:?)\s+(.+))?$/i;
+  const matchInvoice1 = clean.match(invoiceRegex1);
+  if (matchInvoice1) {
+    const target = matchInvoice1[1].startsWith("@") ? matchInvoice1[1] : `@${matchInvoice1[1]}`;
+    const amount = parseFloat(matchInvoice1[2]);
+    const token = (matchInvoice1[3] || "USDC").toUpperCase();
+    const memo = matchInvoice1[4]?.trim() || null;
+    if (!isNaN(amount) && amount > 0) {
+      return { action: "invoice", target, amount, token, memo, confidence: 1.0 };
+    }
+  }
+
+  const invoiceRegex2 = /^(?:request)\s+([0-9.]+)\s*([a-zA-Z0-9]+)?\s+(?:from)\s+([@a-zA-Z0-9_-]{3,64})(?:\s+(?:for|memo:?)\s+(.+))?$/i;
+  const matchInvoice2 = clean.match(invoiceRegex2);
+  if (matchInvoice2) {
+    const amount = parseFloat(matchInvoice2[1]);
+    const token = (matchInvoice2[2] || "USDC").toUpperCase();
+    const target = matchInvoice2[3].startsWith("@") ? matchInvoice2[3] : `@${matchInvoice2[3]}`;
+    const memo = matchInvoice2[4]?.trim() || null;
+    if (!isNaN(amount) && amount > 0) {
+      return { action: "invoice", target, amount, token, memo, confidence: 1.0 };
+    }
+  }
+
+  // 5. Election / Portfolio / Mix query: "mix @whoknows", "election @nothipposol", "portfolio @whoknows"
+  const electionRegex = /^(?:election|elections|mix|mixes|portfolio|allocation|allocations|view|info|check)\s+(?:for\s+)?([@a-zA-Z0-9_-]{3,64})$/i;
   const matchElection = clean.match(electionRegex);
   if (matchElection) {
     const target = matchElection[1].startsWith("@") ? matchElection[1] : `@${matchElection[1]}`;
@@ -75,7 +100,7 @@ export function parseFastCommand(text: string): ParsedBotIntent | null {
     };
   }
 
-  // 5. Bare handle query: "@nothipposol"
+  // 6. Bare handle query: "@nothipposol"
   const bareHandleRegex = /^([@a-zA-Z0-9_-]{3,64})$/;
   const matchBare = clean.match(bareHandleRegex);
   if (matchBare && matchBare[1].startsWith("@")) {
