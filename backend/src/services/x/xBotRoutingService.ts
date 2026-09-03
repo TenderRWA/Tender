@@ -30,11 +30,77 @@ export async function routeBotIntent(params: {
     };
   }
 
-  // 2. Unrecognized action
+  // 2. Election / Portfolio query action
+  if (intent.action === "election" && intent.target) {
+    const cleanHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
+    const handleRes = await query(
+      "SELECT handle, owner_wallet FROM handles WHERE handle = $1 OR LOWER(x_username) = $1 LIMIT 1",
+      [cleanHandle]
+    );
+
+    let recipientHandle = cleanHandle;
+    let recipientWallet = "";
+
+    if (handleRes.rows && handleRes.rows.length > 0) {
+      recipientHandle = handleRes.rows[0].handle;
+      recipientWallet = handleRes.rows[0].owner_wallet;
+    } else {
+      const xAccRes = await query(
+        "SELECT wallet_address, x_username FROM x_accounts WHERE LOWER(x_username) = $1 LIMIT 1",
+        [cleanHandle]
+      );
+      if (xAccRes.rows && xAccRes.rows.length > 0) {
+        recipientWallet = xAccRes.rows[0].wallet_address;
+        const wHandleRes = await query(
+          "SELECT handle FROM handles WHERE owner_wallet = $1 LIMIT 1",
+          [recipientWallet]
+        );
+        if (wHandleRes.rows && wHandleRes.rows.length > 0) {
+          recipientHandle = wHandleRes.rows[0].handle;
+        }
+      }
+    }
+
+    if (!recipientWallet) {
+      return {
+        replyText: `@${cleanHandle} hasn't registered a portfolio on TENDER yet. Tap the link in my bio to claim this handle and elect your stock mix.`,
+        recipientHandle: cleanHandle,
+        recipientWallet: "",
+        isRegistered: false,
+      };
+    }
+
+    const electionsRes = await query(
+      "SELECT asset_symbol, basis_points FROM handle_elections WHERE handle = $1 AND is_active = TRUE ORDER BY basis_points DESC",
+      [recipientHandle]
+    );
+
+    if (!electionsRes.rows || electionsRes.rows.length === 0) {
+      return {
+        replyText: `@${recipientHandle} has no active portfolio elections set yet. Tap the link in my bio to set your allocation.`,
+        recipientHandle,
+        recipientWallet,
+        isRegistered: true,
+      };
+    }
+
+    const allocStr = electionsRes.rows
+      .map((r: any) => `${Math.round(r.basis_points / 100)}% ${r.asset_symbol}`)
+      .join(", ");
+
+    return {
+      replyText: `@${recipientHandle}'s active receive-side portfolio: ${allocStr}. Settles atomically on Solana via Jupiter & Relay.`,
+      recipientHandle,
+      recipientWallet,
+      isRegistered: true,
+    };
+  }
+
+  // 3. Unrecognized action
   if (intent.action === "unrecognized" || !intent.target || !intent.amount) {
     return {
       replyText:
-        "Couldn't identify a payment recipient or amount. Try: '@TenderRWABot pay @handle 50 USDC'. Tap the link in my bio to open the terminal.",
+        "Couldn't identify a payment recipient or amount. Try: '@TenderRWABot pay @handle 50 USDC' or '@TenderRWABot election @handle'. Tap the link in my bio to open the terminal.",
       recipientHandle: "",
       recipientWallet: "",
       isRegistered: false,
