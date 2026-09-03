@@ -33,7 +33,7 @@ export default function Invoices() {
   const [formOpen, setFormOpen] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [mint, setMint] = useState("");
+  const [selectedCurrency, setSelectedCurrency] = useState<string>("USDC");
   const [memo, setMemo] = useState("");
   const [days, setDays] = useState("14");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -60,11 +60,18 @@ export default function Invoices() {
   const submit = () => {
     if (!valid || create.isPending) return;
 
+    const chosenToken =
+      baseCurrencies.find((b) => b.symbol.toUpperCase() === selectedCurrency.toUpperCase()) ||
+      (selectedCurrency.toUpperCase() === "SOL"
+        ? { symbol: "SOL", mint: "So11111111111111111111111111111111111111112" }
+        : { symbol: "USDC", mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" });
+
     create.mutate(
       {
         recipientHandle: effectiveHandle,
         amount: parsed,
-        tokenMint: mint || undefined,
+        tokenMint: chosenToken.mint,
+        tokenSymbol: chosenToken.symbol,
         memo: memo.trim() || undefined,
         expiryMinutes: Math.max(1, Math.round(Number(days || 14) * 24 * 60)),
         creatorWallet: wallet || undefined,
@@ -148,17 +155,13 @@ export default function Invoices() {
                 DENOMINATED IN
               </span>
               <select
-                value={mint}
-                onChange={(e) => setMint(e.target.value)}
+                value={selectedCurrency}
+                onChange={(e) => setSelectedCurrency(e.target.value)}
                 className={inputCls}
-                aria-label="Invoice token"
+                aria-label="Invoice denomination token"
               >
-                <option value="">USDC (default)</option>
-                {baseCurrencies.map((t) => (
-                  <option key={t.mint} value={t.mint}>
-                    {t.symbol}
-                  </option>
-                ))}
+                <option value="USDC">USDC (USD Coin)</option>
+                <option value="SOL">SOL (Solana)</option>
               </select>
             </label>
             <label className="flex flex-col gap-2">
