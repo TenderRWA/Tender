@@ -6,6 +6,7 @@ import { useComingSoon } from "@/components/ComingSoonModal";
 import { useHandleAvailability, useRegisterHandle } from "@/hooks/useTender";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
 import WalletModal from "@/components/wallet/WalletModal";
+import AssetPickerModal from "@/components/dashboard/AssetPickerModal";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
 import {
@@ -284,214 +285,6 @@ function DynamicPreviewCard({
   );
 }
 
-/* ----------------------------- Asset Modal ----------------------------- */
-
-function AssetPickerModal({
-  isOpen,
-  onClose,
-  onSelect,
-  currentSymbol,
-  allAvailableAssets,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (asset: AssetOption) => void;
-  currentSymbol: string;
-  allAvailableAssets: AssetOption[];
-}) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<AssetOption[]>(allAvailableAssets);
-  const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setSearchTerm("");
-      setSearchResults(allAvailableAssets);
-      document.body.style.overflow = "hidden";
-
-      const onKey = (e: KeyboardEvent) => {
-        if (e.key === "Escape") onClose();
-      };
-      window.addEventListener("keydown", onKey);
-
-      setTimeout(() => inputRef.current?.focus(), 100);
-
-      return () => {
-        document.body.style.overflow = "";
-        window.removeEventListener("keydown", onKey);
-      };
-    }
-  }, [isOpen, allAvailableAssets, onClose]);
-
-  useEffect(() => {
-    if (!searchTerm.trim()) {
-      setSearchResults(allAvailableAssets);
-      return;
-    }
-
-    const q = searchTerm.toLowerCase().trim();
-    // Immediate local match
-    const localMatches = allAvailableAssets.filter(
-      (a) =>
-        a.symbol.toLowerCase().includes(q) ||
-        a.name.toLowerCase().includes(q) ||
-        (a.underlyingTicker && a.underlyingTicker.toLowerCase().includes(q))
-    );
-    setSearchResults(localMatches);
-
-    // Debounced remote API search across 714 tokens
-    const timer = setTimeout(async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`${API_BASE}/api/v1/assets?q=${encodeURIComponent(q)}&limit=40`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.assets && data.assets.length > 0) {
-            const combined = [...localMatches];
-            for (const item of data.assets) {
-              if (!combined.some((c) => c.mint === item.mint || c.symbol === item.symbol)) {
-                combined.push(item);
-              }
-            }
-            setSearchResults(combined);
-          }
-        }
-      } catch (err) {
-        // Fallback gracefully
-      } finally {
-        setLoading(false);
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm, allAvailableAssets]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
-      data-lenis-prevent="true"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        data-lenis-prevent="true"
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded border border-hairline bg-card2 p-6 shadow-2xl"
-      >
-        <div className="flex items-center justify-between pb-4 border-b border-hairline">
-          <div>
-            <h3 className="font-display text-lg font-medium text-ink">Select Receive Asset</h3>
-            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-              714+ Solana Tokenized Stocks & Base Currencies
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded p-1.5 font-mono text-xs text-muted2 hover:bg-base hover:text-ink transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div className="relative my-4">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted2" />
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Search symbol, company, or ticker (e.g. NVDA, Apple, S&P 500)..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded border border-hairline bg-base pl-9 pr-4 py-2.5 font-mono text-xs text-ink placeholder:text-muted2 outline-none focus:border-red"
-          />
-        </div>
-
-        {/* Asset List */}
-        <div
-          data-lenis-prevent="true"
-          onWheel={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          className="max-h-[340px] overflow-y-auto overscroll-contain space-y-1 pr-1"
-          style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
-        >
-          {searchResults.length === 0 ? (
-            <div className="py-8 text-center font-mono text-xs text-muted2">
-              {loading ? "Searching 714+ Solana xStocks..." : "No assets match your search"}
-            </div>
-          ) : (
-            searchResults.map((asset) => {
-              const isSelected = asset.symbol === currentSymbol;
-              const assetDotColor = getInitialTokenColor(asset.symbol);
-
-              return (
-                <button
-                  key={asset.mint || asset.symbol}
-                  type="button"
-                  onClick={() => {
-                    onSelect(asset);
-                    onClose();
-                  }}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded p-2.5 transition-colors text-left",
-                    isSelected
-                      ? "bg-red/10 border border-red/30 text-ink"
-                      : "hover:bg-base border border-transparent text-secondary2 hover:text-ink"
-                  )}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span
-                      className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: assetDotColor }}
-                      aria-hidden
-                    />
-                    {asset.iconUrl ? (
-                      <img
-                        src={asset.iconUrl}
-                        alt={asset.symbol}
-                        className="h-7 w-7 rounded-full object-cover border border-hairline shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="h-7 w-7 rounded-full bg-hairline flex items-center justify-center font-mono text-[10px] font-bold text-ink shrink-0">
-                        {asset.symbol.slice(0, 3)}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-semibold text-ink uppercase">
-                          {asset.symbol}
-                        </span>
-                        {asset.underlyingTicker && (
-                          <span className="font-mono text-[10px] text-muted2">
-                            ({asset.underlyingTicker})
-                          </span>
-                        )}
-                      </div>
-                      <p className="truncate font-body text-xs text-muted2">{asset.name}</p>
-                    </div>
-                  </div>
-
-                  {isSelected && <Check className="h-4 w-4 text-red shrink-0" />}
-                </button>
-              );
-            })
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
 /* ---------------------------------- form ---------------------------------- */
 
 const fieldVariants = {
@@ -551,12 +344,12 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
   useEffect(() => {
     async function fetchAssets() {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/assets?featured=true`);
+        const res = await fetch(`${API_BASE}/api/v1/assets?limit=1000`);
         if (res.ok) {
           const data = await res.json();
           const combined = [
             ...(data.baseCurrencies || []),
-            ...(data.featured || []),
+            ...(data.assets || data.featured || []),
           ];
           if (combined.length > 0) {
             setAvailableAssets(combined);
@@ -1127,7 +920,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
         isOpen={activePickerIndex !== null}
         onClose={() => setActivePickerIndex(null)}
         currentSymbol={activePickerIndex !== null ? items[activePickerIndex]?.symbol : ""}
-        allAvailableAssets={availableAssets}
+        initialAssets={availableAssets}
         onSelect={(newAsset) => {
           if (activePickerIndex !== null) {
             updateItemAsset(activePickerIndex, newAsset);
