@@ -240,6 +240,21 @@ export interface XAccountResponse {
 
 // ── Bot Pending Settlements ─────────────────────────────────────────────────
 
+/**
+ * One line of a pending request's delivery plan. Fungible rows carry a
+ * percentage of the elected mix; an NFT row is the whole delivery (`isNft`),
+ * since collectibles bypass elections entirely.
+ */
+export interface PendingPortfolioItem {
+  symbol: string;
+  percentage: number;
+  allocatedAmount: string;
+  name?: string;
+  mint?: string;
+  image?: string;
+  isNft?: boolean;
+}
+
 export interface PendingSettlementRecord {
   id: string;
   sourceRef: string;
@@ -249,9 +264,13 @@ export interface PendingSettlementRecord {
   recipientWallet: string;
   inputToken: string;
   inputAmount: string;
-  portfolioSummary?: Array<{ symbol: string; percentage: number; allocatedAmount: string }>;
+  /** Mint of the asset being sent. Required to build an NFT transfer plan. */
+  tokenMint?: string;
+  /** "nft" routes around the DEX entirely; absent or "token" settles the election. */
+  assetType?: "token" | "nft";
+  portfolioSummary?: PendingPortfolioItem[];
   tweetUrl?: string;
-  status: "pending" | "completed" | "cancelled";
+  status: "pending" | "completed" | "cancelled" | "dismissed";
   signature?: string;
   settledAt?: string;
   createdAt: string;
@@ -262,3 +281,37 @@ export interface PendingSettlementsResponse {
   count: number;
 }
 
+// ── NFT (sovereign direct transfers) ──────────────────────────────────
+
+/** Metaplex metadata as resolved by the backend, with network-dependent extras. */
+export interface NftMetadata {
+  mint: string;
+  name: string;
+  symbol: string;
+  uri?: string;
+  image?: string;
+  description?: string;
+  isToken2022?: boolean;
+}
+
+export interface NftMetadataResponse {
+  nft: NftMetadata;
+}
+
+export interface WalletNftsResponse {
+  nfts: NftMetadata[];
+  count: number;
+}
+
+/**
+ * A compiled V0 transaction moving 1 unit of `nft.mint` to the recipient.
+ * Recipient ATA creation is already baked in, so the client only signs.
+ */
+export interface NftTransferPlanResponse {
+  success: boolean;
+  base64Transaction: string;
+  recipientWallet: string;
+  recipientHandle?: string;
+  nft: NftMetadata;
+  message?: string;
+}

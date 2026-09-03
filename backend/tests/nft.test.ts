@@ -44,6 +44,7 @@ describe("TENDER Sovereign NFT Rail", () => {
     const plan = await buildNftTransferPlan({
       userWallet: senderWallet,
       recipientTag: "@ninjastorm",
+      recipientWallet,
       nftMint: sampleMint,
     });
 
@@ -60,6 +61,7 @@ describe("TENDER Sovereign NFT Rail", () => {
       .send({
         userWallet: senderWallet,
         recipientTag: "@ninjastorm",
+        recipientWallet,
         nftMint: sampleMint,
       });
 

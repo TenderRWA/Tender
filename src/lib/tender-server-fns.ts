@@ -31,6 +31,9 @@ import type {
   UpdateElectionsResponse,
   XAccountResponse,
   PendingSettlementsResponse,
+  NftMetadataResponse,
+  NftTransferPlanResponse,
+  WalletNftsResponse,
 } from "@/types/tender";
 
 import { TenderApiError, tenderFetch } from "@/server/tender-api";
@@ -436,5 +439,59 @@ export const dismissPendingSettlement = createServerFn({ method: "POST" })
         `/api/v1/bot/pending/${encodeURIComponent(data.id)}/dismiss`,
         { method: "POST" },
       ),
+    ),
+  );
+
+// -- NFT (sovereign direct transfers) ---------------------------------------
+
+/** Base58 is 32-44 chars for a Solana address; the API rejects anything else. */
+const solanaAddressSchema = z
+  .string()
+  .trim()
+  .regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, "Not a valid Solana address");
+
+export const getNftMetadata = createServerFn({ method: "GET" })
+  .validator(z.object({ mint: solanaAddressSchema }))
+  .handler(({ data }): Promise<NftMetadataResponse> =>
+    proxy(() => tenderFetch<NftMetadataResponse>(`/api/v1/nft/${encodeURIComponent(data.mint)}`)),
+  );
+
+export const getWalletNfts = createServerFn({ method: "GET" })
+  .validator(z.object({ wallet: solanaAddressSchema }))
+  .handler(({ data }): Promise<WalletNftsResponse> =>
+    proxy(() =>
+      tenderFetch<WalletNftsResponse>(`/api/v1/nft/wallet/${encodeURIComponent(data.wallet)}`),
+    ),
+  );
+
+/**
+ * Builds the signable transfer. Either a tag or a wallet identifies the
+ * recipient; the backend resolves a tag through the handle registry.
+ */
+export const buildNftTransferPlan = createServerFn({ method: "POST" })
+  .validator(
+    z
+      .object({
+        userWallet: solanaAddressSchema,
+        recipientTag: handleSchema.optional(),
+        recipientWallet: solanaAddressSchema.optional(),
+        nftMint: solanaAddressSchema,
+      })
+      .refine((v) => Boolean(v.recipientTag || v.recipientWallet), {
+        message: "A recipient tag or wallet is required",
+        path: ["recipientTag"],
+      }),
+  )
+  .handler(({ data }): Promise<NftTransferPlanResponse> =>
+    proxy(() =>
+      tenderFetch<NftTransferPlanResponse>("/api/v1/nft/transfer-plan", {
+        method: "POST",
+        body: {
+          userWallet: data.userWallet,
+          recipientTag: data.recipientTag,
+          recipientWallet: data.recipientWallet,
+          nftMint: data.nftMint,
+        },
+      }),
     ),
   );

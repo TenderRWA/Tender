@@ -3,7 +3,14 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 import ModulePage from "@/components/dashboard/ModulePage";
 import DashTable, { DashRow, DashCell, StatusPill } from "@/components/dashboard/DashTable";
-import { useAssets, useElectionQuote, useSettlePortfolio, useSettlementHistory } from "@/hooks/useTender";
+import NftTransferPanel from "@/components/dashboard/NftTransferPanel";
+import {
+  useAssets,
+  useElectionQuote,
+  useIsNftEnabled,
+  useSettlePortfolio,
+  useSettlementHistory,
+} from "@/hooks/useTender";
 import type { SettlementLegResult } from "@/hooks/useTender";
 import { useWallet } from "@/lib/wallet/wallet-context";
 import { ExternalLink } from "lucide-react";
@@ -101,11 +108,68 @@ interface SettlementRecord extends SettlementLegResult {
   at: string;
 }
 
+type ComposerMode = "token" | "nft";
+
+const MODES: { id: ComposerMode; label: string; hint: string }[] = [
+  { id: "token", label: "Tokens", hint: "Portfolio slicing" },
+  { id: "nft", label: "Transfer NFT", hint: "Direct delivery" },
+];
+
+/**
+ * Switches the composer between the two settlement shapes. The active state
+ * stays red like every other control on the terminal - what marks a
+ * collectible is the content of the panel, not a second accent colour.
+ */
+function ModeSwitcher({
+  mode,
+  onChange,
+}: {
+  mode: ComposerMode;
+  onChange: (m: ComposerMode) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Settlement type"
+      className="inline-flex w-fit gap-1 rounded-xl border border-hairline p-1 glass-soft"
+    >
+      {MODES.map((m) => {
+        const active = mode === m.id;
+        return (
+          <button
+            key={m.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(m.id)}
+            className={`rounded-lg px-4 py-2 text-left transition-all duration-150 cursor-pointer ${
+              active ? "bg-red text-white shadow-xs" : "text-muted2 hover:text-foreground"
+            }`}
+          >
+            <span className="block font-mono text-xs font-semibold uppercase tracking-[0.1em]">
+              {m.label}
+            </span>
+            <span
+              className={`mt-0.5 block font-mono text-[10px] uppercase tracking-[0.08em] ${
+                active ? "text-white/75" : "text-muted2/80"
+              }`}
+            >
+              {m.hint}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Payments() {
   const { address: wallet } = useWallet();
   const { data: assets } = useAssets({ featured: true });
   const payTokens = (assets?.baseCurrencies ?? []).map((t) => t.symbol);
+  const isNftEnabled = useIsNftEnabled();
 
+  const [mode, setMode] = useState<ComposerMode>("token");
   const [handle, setHandle] = useState("");
   const [token, setToken] = useState("USDC");
   const [amount, setAmount] = useState("1000");
@@ -114,8 +178,13 @@ export default function Payments() {
   const debouncedHandle = useDebounced(handle);
   const debouncedAmount = useDebounced(amount);
 
+  const activeMode: ComposerMode = isNftEnabled ? mode : "token";
+
+  // A collectible is never routed, so the quote engine stays idle in NFT mode
+  // rather than polling a route nobody will use.
   const quote = useElectionQuote({
-    recipientHandle: debouncedHandle.trim().length > 1 ? debouncedHandle : undefined,
+    recipientHandle:
+      activeMode === "token" && debouncedHandle.trim().length > 1 ? debouncedHandle : undefined,
     fromSymbolOrMint: token,
     amountIn: debouncedAmount,
     userWallet: wallet || undefined,
@@ -194,11 +263,40 @@ export default function Payments() {
 
   return (
     <ModulePage
-      badge="SETTLEMENTS"
+      index="02"
+      label="PAYMENTS"
       title="Pay any handle."
-      description="Send USDC or SOL to any registered handle. The router quotes both Jupiter and Relay in parallel, takes the winning price for each leg, and settles the entire elected mix."
+      blurb="Send USDC or SOL to any registered handle. The router quotes both Jupiter and Relay in parallel, takes the winning price for each leg, and settles the entire elected mix."
     >
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 my-8">
+      {isNftEnabled && (
+        <div className="mt-8">
+          <ModeSwitcher mode={mode} onChange={setMode} />
+        </div>
+      )}
+
+      <div className={`grid grid-cols-1 xl:grid-cols-12 gap-8 ${isNftEnabled ? "my-8" : "mb-8 mt-6"}`}>
+        {isNftEnabled && activeMode === "nft" ? (
+          <NftTransferPanel
+            handle={handle}
+            onHandleChange={setHandle}
+            onNftSettled={(res) => {
+              const now = new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              setLog((prev) => [
+                {
+                  symbol: res.nft.symbol || res.nft.name || "NFT",
+                  signature: res.signature,
+                  handle: res.handle,
+                  at: now,
+                },
+                ...prev,
+              ]);
+            }}
+          />
+        ) : (
+          <>
         {/* Payment input card */}
         <div className="xl:col-span-7 glass rounded-2xl p-6 md:p-8 flex flex-col gap-6">
           <span className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
@@ -379,6 +477,8 @@ export default function Payments() {
             )
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* Verified On-Chain Settlement Receipts */}

@@ -77,28 +77,28 @@ export default function AssetPickerModal({
   }, [searchTerm, activeTab, featuredList, allAssets]);
 
   useEffect(() => {
-    if (isOpen) {
-      setSearchTerm("");
-      setActiveTab("featured"); // Default to featured as requested
+    if (!isOpen) return;
 
-      const lenis = getLenis();
-      lenis?.stop();
-      document.body.style.overflow = "hidden";
-      document.body.style.touchAction = "none";
+    setSearchTerm("");
+    setActiveTab("featured"); // Default to featured as requested
 
-      const onKey = (e: KeyboardEvent) => {
-        if (e.key === "Escape") onClose();
-      };
-      window.addEventListener("keydown", onKey);
-      setTimeout(() => inputRef.current?.focus(), 80);
+    const lenis = getLenis();
+    lenis?.stop();
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
 
-      return () => {
-        lenis?.start();
-        document.body.style.overflow = "";
-        document.body.style.touchAction = "";
-        window.removeEventListener("keydown", onKey);
-      };
-    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    setTimeout(() => inputRef.current?.focus(), 80);
+
+    return () => {
+      lenis?.start();
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+      window.removeEventListener("keydown", onKey);
+    };
   }, [isOpen, onClose]);
 
   return (

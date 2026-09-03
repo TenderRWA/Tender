@@ -21,6 +21,9 @@ import {
   dismissPendingSettlement,
   registerHandle,
   updateElections,
+  buildNftTransferPlan,
+  getNftMetadata,
+  getWalletNfts,
 } from "@/lib/tender-server-fns";
 import type {
   AssetsResponse,
@@ -37,6 +40,9 @@ import type {
   SolanaTokenInfo,
   XAccountResponse,
   PendingSettlementsResponse,
+  NftMetadata,
+  NftMetadataResponse,
+  WalletNftsResponse,
 } from "@/types/tender";
 
 /**
@@ -45,7 +51,7 @@ import type {
  * to its own origin and never triggers a CORS preflight.
  */
 
-const cleanHandle = (handle: string) => handle.trim().replace(/^@/, "").toLowerCase();
+export const cleanHandle = (handle: string) => handle.trim().replace(/^@/, "").toLowerCase();
 
 // -- Assets -----------------------------------------------------------------
 
@@ -250,7 +256,7 @@ export function useSettlePortfolio() {
           });
 
           results.push({ symbol: leg.assetSymbol, signature });
-        } catch (err: any) {
+        } catch (err) {
           console.error(`[useSettlePortfolio] Error executing leg ${leg.assetSymbol}:`, err);
           // If at least one leg already executed on-chain, return the executed signatures rather than discarding progress
           if (results.some((r) => r.signature)) {
@@ -414,3 +420,121 @@ export function useDismissPendingSettlement() {
   });
 }
 
+
+// -- NFT (sovereign direct transfers) ---------------------------------------
+
+/**
+ * Feature flag: Sovereign NFT Transfers.
+ * Gated behind VITE_ENABLE_NFT=true or VITE_NFT_ENABLED=true in the environment (e.g. Vercel).
+ */
+export const isNftFeatureEnabled = (): boolean => {
+  // Vite client / build-time environment
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    const v =
+      import.meta.env.VITE_ENABLE_NFT ??
+      import.meta.env.VITE_NFT_ENABLED ??
+      import.meta.env.ENABLE_NFT;
+    if (v === "true" || v === "1" || v === true) return true;
+  }
+  // Server-side / SSR process environment
+  if (typeof process !== "undefined" && process.env) {
+    const p =
+      process.env.VITE_ENABLE_NFT ??
+      process.env.VITE_NFT_ENABLED ??
+      process.env.ENABLE_NFT;
+    if (p === "true" || p === "1") return true;
+  }
+  return false;
+};
+
+export const useIsNftEnabled = () => isNftFeatureEnabled();
+
+/** Base58, 32-44 chars. Guards the query so a half-typed mint never fires. */
+const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+export const isSolanaAddress = (value: string | null | undefined) =>
+  MINT_RE.test((value ?? "").trim());
+
+export const solscanTokenUrl = (mint: string) => `https://solscan.io/token/${mint}`;
+
+export const truncateMint = (mint: string, head = 4, tail = 4) =>
+  mint.length > head + tail + 1 ? `${mint.slice(0, head)}…${mint.slice(-tail)}` : mint;
+
+/** Resolves Metaplex metadata for a pasted mint. */
+export function useNftMetadata(mint: string | null | undefined) {
+  const clean = (mint ?? "").trim();
+  return useQuery<NftMetadataResponse>({
+    queryKey: ["tender", "nft", clean],
+    queryFn: () => getNftMetadata({ data: { mint: clean } }),
+    enabled: isSolanaAddress(clean),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Collectibles held by the connected wallet, for the picker grid. */
+export function useWalletNfts(wallet: string | null | undefined) {
+  const clean = (wallet ?? "").trim();
+  return useQuery<WalletNftsResponse>({
+    queryKey: ["tender", "wallet-nfts", clean],
+    queryFn: () => getWalletNfts({ data: { wallet: clean } }),
+    enabled: isSolanaAddress(clean),
+    retry: false,
+    staleTime: 60 * 1000,
+  });
+}
+
+export interface NftTransferResult {
+  signature: string;
+  nft: NftMetadata;
+  recipientWallet: string;
+  recipientHandle?: string;
+}
+
+/**
+ * Builds, signs and sends one direct NFT transfer.
+ *
+ * Deliberately never touches the quote engine: an NFT is delivered 1:1 and is
+ * never routed through a DEX, so there is no election to slice and no route to
+ * price. Recipient ATA creation is already inside the transaction the backend
+ * returns, which is why this is a single signature rather than a leg loop.
+ */
+export function useTransferNft() {
+  const queryClient = useQueryClient();
+  const { signAndSendBase64 } = useWallet();
+
+  return useMutation<
+    NftTransferResult,
+    Error,
+    { userWallet: string; nftMint: string; recipientTag?: string; recipientWallet?: string }
+  >({
+    mutationFn: async ({ userWallet, nftMint, recipientTag, recipientWallet }) => {
+      const plan = await buildNftTransferPlan({
+        data: {
+          userWallet,
+          nftMint,
+          recipientTag: recipientTag ? cleanHandle(recipientTag) : undefined,
+          recipientWallet: recipientWallet || undefined,
+        },
+      });
+
+      if (!plan.base64Transaction) {
+        throw new Error("The rail returned no signable transaction for this collectible.");
+      }
+
+      const signature = await signAndSendBase64(plan.base64Transaction);
+
+      return {
+        signature,
+        nft: plan.nft,
+        recipientWallet: plan.recipientWallet,
+        recipientHandle: plan.recipientHandle,
+      };
+    },
+    onSuccess: (_result, variables) => {
+      // The sender no longer holds it, so the picker has to forget it.
+      queryClient.invalidateQueries({ queryKey: ["tender", "wallet-nfts", variables.userWallet] });
+      queryClient.invalidateQueries({ queryKey: ["tender", "settlement-history"] });
+    },
+  });
+}

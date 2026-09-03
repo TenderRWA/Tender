@@ -15,17 +15,27 @@ import ModulePage from "@/components/dashboard/ModulePage";
 import StatCard from "@/components/dashboard/StatCard";
 import DashTable, { DashRow, DashCell, StatusPill } from "@/components/dashboard/DashTable";
 import WalletModal from "@/components/wallet/WalletModal";
+import {
+  MintLink,
+  NftBadge,
+  NftIdentity,
+  NftThumb,
+  SovereignDeliveryNote,
+} from "@/components/dashboard/NftMedia";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   usePendingSettlements,
   useInvoices,
   useElectionQuote,
+  useIsNftEnabled,
   useSettlePortfolio,
   useConfirmPendingSettlement,
   useDismissPendingSettlement,
+  useNftMetadata,
+  useTransferNft,
   type SettlementLegResult,
 } from "@/hooks/useTender";
-import type { PendingSettlementRecord } from "@/types/tender";
+import type { NftMetadata, PendingSettlementRecord } from "@/types/tender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
 
@@ -48,6 +58,35 @@ const formatAmount = (amt: string | number) => {
   });
 };
 
+/**
+ * Collectible requests are flagged two ways by the bot — an explicit
+ * `assetType` and the legacy `inputToken: "NFT"`. Accept both.
+ */
+const isNftSettlement = (s: PendingSettlementRecord) =>
+  s.assetType === "nft" || s.inputToken?.toUpperCase() === "NFT";
+
+/**
+ * Best available identity for the collectible on a pending row. The bot embeds
+ * name and image in `portfolioSummary`; when it doesn't, resolve the mint.
+ */
+function useSettlementNft(settlement: PendingSettlementRecord) {
+  const summary =
+    settlement.portfolioSummary?.find((p) => p.isNft) ?? settlement.portfolioSummary?.[0];
+  const mint = settlement.tokenMint || summary?.mint || "";
+  const embedded = Boolean(summary?.name && summary?.image);
+
+  const query = useNftMetadata(embedded ? null : mint);
+
+  const nft: NftMetadata = {
+    mint,
+    name: query.data?.nft?.name || summary?.name || "",
+    symbol: query.data?.nft?.symbol || (summary?.symbol === "NFT" ? "" : summary?.symbol) || "",
+    image: query.data?.nft?.image || summary?.image,
+  };
+
+  return { nft, isLoading: query.isLoading, hasMint: Boolean(mint) };
+}
+
 type FilterTab = "all" | "x_bot" | "invoices";
 
 export default function Pending() {
@@ -61,12 +100,16 @@ export default function Pending() {
   const [dismissSuccessModal, setDismissSuccessModal] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
 
+  const isNftEnabled = useIsNftEnabled();
+
   // 1. Fetch pending settlements from X bot
   const { data: botData, isLoading: botLoading } = usePendingSettlements({
     handle: handle || undefined,
     status: "all",
   });
-  const botSettlements = (botData?.pendingSettlements ?? []).filter((s) => s.status !== "dismissed");
+  const botSettlements = (botData?.pendingSettlements ?? []).filter(
+    (s) => s.status !== "dismissed" && (isNftEnabled || !isNftSettlement(s)),
+  );
 
   // 2. Fetch pending invoices
   const { data: invData, isLoading: invLoading } = useInvoices({
@@ -92,19 +135,19 @@ export default function Pending() {
           label="Total Pending"
           value={totalActivePending}
           delta={totalActivePending === 1 ? "1 awaiting signature" : `${totalActivePending} awaiting signature`}
-          deltaTone={totalActivePending > 0 ? "warning" : "neutral"}
+          deltaTone={totalActivePending > 0 ? "warning" : "success"}
         />
         <StatCard
           label="𝕏 Bot Mentions"
           value={activePendingBot.length}
           delta={`${activePendingBot.length} tweet requests`}
-          deltaTone={activePendingBot.length > 0 ? "accent" : "neutral"}
+          deltaTone={activePendingBot.length > 0 ? "warning" : "success"}
         />
         <StatCard
           label="Invoices Due"
           value={invoices.length}
           delta={`${invoices.length} open pay-links`}
-          deltaTone={invoices.length > 0 ? "accent" : "neutral"}
+          deltaTone={invoices.length > 0 ? "warning" : "success"}
         />
       </div>
 
@@ -188,100 +231,12 @@ export default function Pending() {
                 columns={["ORIGIN / SOURCE", "AMOUNT", "RECIPIENT", "PORTFOLIO MIX", "STATUS", "ACTION"]}
               >
                 {botSettlements.map((s) => (
-                  <DashRow key={s.id}>
-                    <DashCell>
-                      <div className="flex items-center gap-2">
-                        {s.tweetUrl ? (
-                          <a
-                            href={s.tweetUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-mono text-xs text-foreground hover:text-red transition-colors"
-                          >
-                            <span>@{s.authorXHandle || "author"}</span>
-                            <ExternalLink className="w-3 h-3 text-muted2" />
-                          </a>
-                        ) : (
-                          <span className="font-mono text-xs text-foreground">
-                            @{s.authorXHandle || "unknown"}
-                          </span>
-                        )}
-                        <span className="font-mono text-[10px] text-muted2">
-                          · {new Date(s.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </DashCell>
-
-                    <DashCell>
-                      <span className="font-mono font-semibold text-foreground">
-                        {formatAmount(s.inputAmount)} <span className="text-red">{s.inputToken}</span>
-                      </span>
-                    </DashCell>
-
-                    <DashCell>
-                      <span className="font-mono text-xs text-foreground font-medium">
-                        @{s.recipientHandle}
-                      </span>
-                    </DashCell>
-
-                    <DashCell>
-                      <div className="flex flex-wrap gap-1 max-w-[200px]">
-                        {s.portfolioSummary && s.portfolioSummary.length > 0 ? (
-                          s.portfolioSummary.map((item, idx) => (
-                            <span
-                              key={idx}
-                              className="px-1.5 py-0.5 rounded bg-base/70 border border-hairline font-mono text-[10px] text-foreground"
-                            >
-                              {item.percentage}% {item.symbol}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="font-mono text-xs text-muted2">—</span>
-                        )}
-                      </div>
-                    </DashCell>
-
-                    <DashCell>
-                      <StatusPill status={s.status} />
-                    </DashCell>
-
-                    <DashCell align="right">
-                      {s.status === "completed" ? (
-                        s.signature ? (
-                          <a
-                            href={`https://solscan.io/tx/${s.signature}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-mono text-xs text-success hover:underline"
-                          >
-                            <span>Tx: {truncate(s.signature, 8)}</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : (
-                          <span className="font-mono text-xs text-muted2">Settled</span>
-                        )
-                      ) : (
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setSettlementToDismiss(s)}
-                            className="px-2.5 py-1.5 rounded-lg border border-hairline hover:bg-base text-muted2 hover:text-foreground font-mono text-xs uppercase tracking-[0.08em] font-medium transition-all cursor-pointer"
-                            title="Dismiss to unclutter view"
-                          >
-                            Dismiss
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedSettlement(s)}
-                            className="px-3 py-1.5 rounded-lg bg-red hover:bg-red-hover text-white font-mono text-xs uppercase tracking-[0.08em] font-semibold transition-all shadow-xs hover:-translate-y-0.5 cursor-pointer flex items-center gap-1.5"
-                          >
-                            <span>Review & Sign</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                    </DashCell>
-                  </DashRow>
+                  <BotSettlementRow
+                    key={s.id}
+                    settlement={s}
+                    onDismiss={() => setSettlementToDismiss(s)}
+                    onReview={() => setSelectedSettlement(s)}
+                  />
                 ))}
               </DashTable>
             )}
@@ -358,7 +313,7 @@ export default function Pending() {
                       </span>
                     </DashCell>
 
-                    <DashCell align="right">
+                    <DashCell className="text-right">
                       <a
                         href={`/pay/${inv.id}`}
                         target="_blank"
@@ -515,6 +470,140 @@ export default function Pending() {
 }
 
 /**
+ * One 𝕏-initiated request. Collectibles and fungible payments share the row
+ * shape but not the middle two columns: an NFT has no amount to format and no
+ * mix to slice, so it shows what is actually being delivered instead.
+ */
+function BotSettlementRow({
+  settlement: s,
+  onDismiss,
+  onReview,
+}: {
+  settlement: PendingSettlementRecord;
+  onDismiss: () => void;
+  onReview: () => void;
+}) {
+  const isNft = isNftSettlement(s);
+  const { nft } = useSettlementNft(s);
+
+  return (
+    <DashRow>
+      <DashCell>
+        <div className="flex items-center gap-2">
+          {s.tweetUrl ? (
+            <a
+              href={s.tweetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-mono text-xs text-foreground hover:text-red transition-colors"
+            >
+              <span>@{s.authorXHandle || "author"}</span>
+              <ExternalLink className="w-3 h-3 text-muted2" />
+            </a>
+          ) : (
+            <span className="font-mono text-xs text-foreground">
+              @{s.authorXHandle || "unknown"}
+            </span>
+          )}
+          <span className="font-mono text-[10px] text-muted2">
+            · {new Date(s.createdAt).toLocaleDateString()}
+          </span>
+        </div>
+      </DashCell>
+
+      <DashCell>
+        {isNft ? (
+          <div className="flex items-center gap-2.5">
+            <NftThumb nft={nft} size="sm" />
+            <div className="min-w-0">
+              <NftBadge />
+              {nft.mint && <MintLink mint={nft.mint} className="mt-1 block" />}
+            </div>
+          </div>
+        ) : (
+          <span className="font-mono font-semibold text-foreground">
+            {formatAmount(s.inputAmount)} <span className="text-red">{s.inputToken}</span>
+          </span>
+        )}
+      </DashCell>
+
+      <DashCell>
+        <span className="font-mono text-xs text-foreground font-medium">@{s.recipientHandle}</span>
+      </DashCell>
+
+      <DashCell>
+        {isNft ? (
+          <div className="max-w-[220px]">
+            <span className="block truncate font-body text-xs font-medium text-foreground">
+              {nft.name || "Collectible"}
+            </span>
+            <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-muted2">
+              Direct Sovereign Delivery (100%)
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1 max-w-[200px]">
+            {s.portfolioSummary && s.portfolioSummary.length > 0 ? (
+              s.portfolioSummary.map((item, idx) => (
+                <span
+                  key={idx}
+                  className="px-1.5 py-0.5 rounded bg-base/70 border border-hairline font-mono text-[10px] text-foreground"
+                >
+                  {item.percentage}% {item.symbol}
+                </span>
+              ))
+            ) : (
+              <span className="font-mono text-xs text-muted2">—</span>
+            )}
+          </div>
+        )}
+      </DashCell>
+
+      <DashCell>
+        <StatusPill status={s.status} />
+      </DashCell>
+
+      <DashCell className="text-right">
+        {s.status === "completed" ? (
+          s.signature ? (
+            <a
+              href={`https://solscan.io/tx/${s.signature}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-mono text-xs text-success hover:underline"
+            >
+              <span>Tx: {truncate(s.signature, 8)}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          ) : (
+            <span className="font-mono text-xs text-muted2">Settled</span>
+          )
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="px-2.5 py-1.5 rounded-lg border border-hairline hover:bg-base text-muted2 hover:text-foreground font-mono text-xs uppercase tracking-[0.08em] font-medium transition-all cursor-pointer"
+              title="Dismiss to unclutter view"
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={onReview}
+              className="px-3 py-1.5 rounded-lg bg-red hover:bg-red-hover text-white font-mono text-xs uppercase tracking-[0.08em] font-semibold transition-all shadow-xs hover:-translate-y-0.5 cursor-pointer flex items-center gap-1.5"
+            >
+              <span>{isNft ? "Review & Transfer" : "Review & Sign"}</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </DashCell>
+    </DashRow>
+  );
+}
+
+/**
  * Apple-grade Modal for reviewing and signing an 𝕏-initiated settlement.
  */
 function SettlementSignModal({
@@ -529,32 +618,66 @@ function SettlementSignModal({
   const queryClient = useQueryClient();
   const { address: wallet } = useWallet();
   const settle = useSettlePortfolio();
+  const transferNft = useTransferNft();
   const confirm = useConfirmPendingSettlement();
+
+  const isNft = isNftSettlement(settlement);
+  const { nft, hasMint } = useSettlementNft(settlement);
 
   const [confirmedTx, setConfirmedTx] = useState<string | null>(null);
   const [completedLegs, setCompletedLegs] = useState<SettlementLegResult[] | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  // Quote the transaction
+  // Quote the transaction. A collectible is delivered 1:1 and never routed
+  // through a DEX, so the quote engine is left out of the flow entirely -
+  // passing no handle keeps the query disabled rather than merely ignored.
   const amountNum = parseFloat(settlement.inputAmount) || 0;
   const quote = useElectionQuote({
-    recipientHandle: settlement.recipientHandle,
+    recipientHandle: isNft ? undefined : settlement.recipientHandle,
     fromSymbolOrMint: settlement.inputToken || "USDC",
-    amountIn: amountNum,
+    amountIn: isNft ? 0 : amountNum,
     userWallet: wallet || undefined,
   });
 
   const hasLegs = Boolean(quote.data?.portfolioResult?.legs?.length);
-  const canSettle = Boolean(wallet) && !settle.isPending && hasLegs;
+  const isWorking = settle.isPending || transferNft.isPending;
+  const canSettle = isNft
+    ? Boolean(wallet) && !isWorking && hasMint
+    : Boolean(wallet) && !isWorking && hasLegs;
+
+  /** Records the settlement against the queue row and shows the receipt. */
+  const onSettled = (signature: string, legs: SettlementLegResult[] | null) => {
+    setConfirmedTx(signature);
+    setCompletedLegs(legs);
+    confirm.mutate({ id: settlement.id, signature, payerWallet: wallet || undefined });
+    queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
+  };
 
   const handleSign = () => {
     if (!wallet) {
       onOpenWallet();
       return;
     }
-    if (!canSettle || !quote.data) return;
-
+    if (!canSettle) return;
     setModalError(null);
+
+    if (isNft) {
+      transferNft.mutate(
+        {
+          userWallet: wallet,
+          nftMint: nft.mint,
+          recipientTag: settlement.recipientHandle,
+          recipientWallet: settlement.recipientWallet || undefined,
+        },
+        {
+          onSuccess: (result) => onSettled(result.signature, null),
+          onError: (err) => setModalError(err.message || "Failed to transfer collectible"),
+        },
+      );
+      return;
+    }
+
+    if (!quote.data) return;
     settle.mutate(
       {
         quote: quote.data,
@@ -562,20 +685,8 @@ function SettlementSignModal({
         recipientHandle: settlement.recipientHandle,
       },
       {
-        onSuccess: (result) => {
-          const sig = result.signatures[0] || "confirmed";
-          setConfirmedTx(sig);
-          setCompletedLegs(result.legs);
-          confirm.mutate({
-            id: settlement.id,
-            signature: sig,
-            payerWallet: wallet,
-          });
-          queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
-        },
-        onError: (err) => {
-          setModalError(err.message || "Failed to settle transaction");
-        },
+        onSuccess: (result) => onSettled(result.signatures[0] || "confirmed", result.legs),
+        onError: (err) => setModalError(err.message || "Failed to settle transaction"),
       }
     );
   };
@@ -594,7 +705,8 @@ function SettlementSignModal({
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-bold text-red">■</span>
             <span className="font-mono text-xs uppercase tracking-[0.14em] text-secondary2">
-              SIGN SETTLEMENT · {settlement.sourceRef ? `𝕏 ${settlement.sourceRef}` : settlement.id}
+              {isNft ? "TRANSFER COLLECTIBLE" : "SIGN SETTLEMENT"} ·{" "}
+              {settlement.sourceRef ? `𝕏 ${settlement.sourceRef}` : settlement.id}
             </span>
           </div>
           <button
@@ -615,10 +727,20 @@ function SettlementSignModal({
 
             <div className="space-y-2">
               <h3 className="font-display text-xl font-bold text-foreground">
-                Settlement Completed!
+                {isNft ? "Collectible Delivered!" : "Settlement Completed!"}
               </h3>
               <p className="font-body text-xs text-muted2 max-w-sm mx-auto">
-                Atomic legs settled into @{settlement.recipientHandle}&apos;s elected portfolio directly on Solana.
+                {isNft ? (
+                  <>
+                    Transferred 1:1 into @{settlement.recipientHandle}&apos;s wallet on Solana. No
+                    DEX selling, no election slicing.
+                  </>
+                ) : (
+                  <>
+                    Atomic legs settled into @{settlement.recipientHandle}&apos;s elected portfolio
+                    directly on Solana.
+                  </>
+                )}
               </p>
             </div>
 
@@ -627,12 +749,21 @@ function SettlementSignModal({
                 <span className="text-muted2">Recipient</span>
                 <span className="text-foreground font-semibold">@{settlement.recipientHandle}</span>
               </div>
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-muted2">Settled Amount</span>
-                <span className="text-foreground font-semibold">
-                  {formatAmount(settlement.inputAmount)} {settlement.inputToken}
-                </span>
-              </div>
+              {isNft ? (
+                <div className="flex items-center justify-between gap-4 text-xs font-mono">
+                  <span className="shrink-0 text-muted2">Delivered</span>
+                  <span className="min-w-0 truncate text-foreground font-semibold">
+                    {nft.name || "Collectible"}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-muted2">Settled Amount</span>
+                  <span className="text-foreground font-semibold">
+                    {formatAmount(settlement.inputAmount)} {settlement.inputToken}
+                  </span>
+                </div>
+              )}
 
               {completedLegs && completedLegs.length > 0 ? (
                 <div className="pt-2 border-t border-hairline/60 space-y-2">
@@ -707,15 +838,48 @@ function SettlementSignModal({
 
               <div className="text-right">
                 <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted2 block">
-                  Amount
+                  {isNft ? "Sending" : "Amount"}
                 </span>
-                <span className="font-mono text-xl font-bold text-foreground">
-                  {formatAmount(settlement.inputAmount)} <span className="text-red">{settlement.inputToken}</span>
-                </span>
+                {isNft ? (
+                  <span className="mt-1 inline-flex">
+                    <NftBadge />
+                  </span>
+                ) : (
+                  <span className="font-mono text-xl font-bold text-foreground">
+                    {formatAmount(settlement.inputAmount)}{" "}
+                    <span className="text-red">{settlement.inputToken}</span>
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Atomic DEX Route Quote */}
+            {/* Delivery plan. A collectible has no route to quote - it states
+                what lands and where, and nothing else. */}
+            {isNft ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+                    Delivery
+                  </span>
+                  <span className="font-mono text-[10px] text-muted2">No DEX route required</span>
+                </div>
+
+                <div className="rounded-2xl border border-hairline bg-base/80 p-4">
+                  <NftIdentity nft={nft} size="lg" />
+                </div>
+
+                {!hasMint && (
+                  <div className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
+                    <p className="font-mono text-xs text-warning">
+                      This request carries no mint address, so the transfer cannot be built.
+                    </p>
+                  </div>
+                )}
+
+                <SovereignDeliveryNote handle={settlement.recipientHandle} />
+              </div>
+            ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
@@ -771,6 +935,7 @@ function SettlementSignModal({
                 </div>
               )}
             </div>
+            )}
 
             {/* Error banner if mutation fails */}
             {modalError && (
@@ -791,21 +956,29 @@ function SettlementSignModal({
                   : "bg-hairline text-muted2 cursor-not-allowed"
               }`}
             >
-              {settle.isPending ? (
+              {isWorking ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  <span>Signing & Settling on Solana…</span>
+                  <span>{isNft ? "Transferring on Solana…" : "Signing & Settling on Solana…"}</span>
                 </>
               ) : !wallet ? (
-                "Connect Wallet to Settle"
-              ) : quote.isFetching ? (
+                isNft ? (
+                  "Connect Wallet to Transfer"
+                ) : (
+                  "Connect Wallet to Settle"
+                )
+              ) : !isNft && quote.isFetching ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   <span>Quoting Route…</span>
                 </>
               ) : (
                 <>
-                  <span>Sign & Settle {formatAmount(settlement.inputAmount)} {settlement.inputToken}</span>
+                  <span>
+                    {isNft
+                      ? `Sign & Transfer NFT to @${settlement.recipientHandle}`
+                      : `Sign & Settle ${formatAmount(settlement.inputAmount)} ${settlement.inputToken}`}
+                  </span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
