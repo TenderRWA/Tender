@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X, Check } from "lucide-react";
+import { Search, X, Check, Sparkles, Globe } from "lucide-react";
+import { getLenis } from "@/lib/lenis";
 import { useAssets } from "@/hooks/useTender";
 import type { SolanaTokenInfo } from "@/types/tender";
 
@@ -20,20 +21,34 @@ export default function AssetPickerModal({
   initialAssets,
 }: AssetPickerModalProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"featured" | "all">("featured");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load all 714+ assets from catalog (not just featured!)
+  // Load full asset catalog (714+ assets) from API
   const { data: assetData, isLoading } = useAssets({ limit: 1000 });
 
-  const allAssets = useMemo<SolanaTokenInfo[]>(() => {
-    if (initialAssets && initialAssets.length > 10) return initialAssets;
-    if (!assetData) return initialAssets || [];
+  // Featured list: Base currencies + Featured xStocks
+  const featuredList = useMemo<SolanaTokenInfo[]>(() => {
+    if (!assetData) return (initialAssets || []).slice(0, 10);
+    const list = [
+      ...(assetData.baseCurrencies || []),
+      ...(assetData.featured || []),
+    ];
+    const seen = new Set<string>();
+    return list.filter((item) => {
+      if (!item?.mint || seen.has(item.mint)) return false;
+      seen.add(item.mint);
+      return true;
+    });
+  }, [assetData, initialAssets]);
 
+  // All assets list: Base currencies + All 714+ xStocks
+  const allAssets = useMemo<SolanaTokenInfo[]>(() => {
+    if (!assetData) return initialAssets || [];
     const merged = [
       ...(assetData.baseCurrencies || []),
       ...(assetData.assets || assetData.featured || []),
     ];
-
     const seen = new Set<string>();
     return merged.filter((item) => {
       if (!item?.mint || seen.has(item.mint)) return false;
@@ -42,22 +57,35 @@ export default function AssetPickerModal({
     });
   }, [assetData, initialAssets]);
 
-  const filteredAssets = useMemo(() => {
-    if (!searchTerm.trim()) return allAssets;
+  // Filtered based on active tab and search query
+  const displayedAssets = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
-    return allAssets.filter(
-      (a) =>
-        a.symbol.toLowerCase().includes(q) ||
-        a.name.toLowerCase().includes(q) ||
-        (a.underlyingTicker && a.underlyingTicker.toLowerCase().includes(q)) ||
-        a.mint.toLowerCase() === q
-    );
-  }, [allAssets, searchTerm]);
+
+    // If searching, search across the entire 714+ catalog so nothing is missed
+    if (q) {
+      return allAssets.filter(
+        (a) =>
+          a.symbol.toLowerCase().includes(q) ||
+          a.name.toLowerCase().includes(q) ||
+          (a.underlyingTicker && a.underlyingTicker.toLowerCase().includes(q)) ||
+          a.mint.toLowerCase() === q
+      );
+    }
+
+    // Otherwise, respect the active tab (default: featured)
+    return activeTab === "featured" ? featuredList : allAssets;
+  }, [searchTerm, activeTab, featuredList, allAssets]);
 
   useEffect(() => {
     if (isOpen) {
       setSearchTerm("");
+      setActiveTab("featured"); // Default to featured as requested
+
+      const lenis = getLenis();
+      lenis?.stop();
       document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+
       const onKey = (e: KeyboardEvent) => {
         if (e.key === "Escape") onClose();
       };
@@ -65,7 +93,9 @@ export default function AssetPickerModal({
       setTimeout(() => inputRef.current?.focus(), 80);
 
       return () => {
+        lenis?.start();
         document.body.style.overflow = "";
+        document.body.style.touchAction = "";
         window.removeEventListener("keydown", onKey);
       };
     }
@@ -75,12 +105,18 @@ export default function AssetPickerModal({
     <AnimatePresence>
       {isOpen && (
         <div
+          data-lenis-prevent="true"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
           onClick={onClose}
           role="dialog"
           aria-modal="true"
         >
           <motion.div
+            data-lenis-prevent="true"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
@@ -95,7 +131,9 @@ export default function AssetPickerModal({
                   Select Receive Asset
                 </h3>
                 <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 mt-0.5">
-                  714+ Solana Tokenized Stocks & Base Currencies
+                  {allAssets.length > 0
+                    ? `${allAssets.length} Solana Tokenized Stocks & Base Currencies`
+                    : "714+ Solana Tokenized Stocks & Base Currencies"}
                 </p>
               </div>
               <button
@@ -108,13 +146,53 @@ export default function AssetPickerModal({
               </button>
             </div>
 
+            {/* Segmented Toggle: Featured (default) vs All Assets */}
+            <div className="flex items-center justify-between gap-3 pt-4 pb-2">
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-base/80 border border-hairline/80 text-xs font-mono">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("featured")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                    activeTab === "featured"
+                      ? "bg-card2 text-foreground font-semibold shadow-xs border border-hairline"
+                      : "text-muted2 hover:text-foreground"
+                  }`}
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Featured ({featuredList.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("all")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                    activeTab === "all"
+                      ? "bg-card2 text-foreground font-semibold shadow-xs border border-hairline"
+                      : "text-muted2 hover:text-foreground"
+                  }`}
+                >
+                  <Globe className="w-3 h-3 text-secondary2" />
+                  <span>All Assets ({allAssets.length})</span>
+                </button>
+              </div>
+
+              {searchTerm.trim() && (
+                <span className="font-mono text-[10px] text-muted2 uppercase tracking-wider">
+                  Global Search
+                </span>
+              )}
+            </div>
+
             {/* Search Input */}
-            <div className="relative my-4">
+            <div className="relative my-2">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted2" />
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Search by symbol, company, or ticker (e.g. AAPL, NVDA, S&P 500)..."
+                placeholder={
+                  activeTab === "featured"
+                    ? "Search featured or type to search all 714+ assets..."
+                    : "Search all 714+ assets by ticker or company name..."
+                }
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full rounded-xl border border-hairline bg-base/80 pl-10 pr-4 py-2.5 font-mono text-xs text-foreground placeholder:text-muted2 outline-none focus:border-red focus:ring-1 focus:ring-red/30 transition-all"
@@ -123,20 +201,23 @@ export default function AssetPickerModal({
 
             {/* Token List */}
             <div
-              className="flex-1 overflow-y-auto overscroll-contain space-y-1 pr-1 min-h-[220px] max-h-[380px]"
+              data-lenis-prevent="true"
+              onWheel={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              className="flex-1 overflow-y-auto overscroll-contain space-y-1 pr-1 min-h-[220px] max-h-[360px] mt-2"
               style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
             >
               {isLoading && allAssets.length === 0 ? (
                 <div className="py-12 text-center space-y-2">
                   <div className="w-5 h-5 mx-auto border-2 border-hairline border-t-red rounded-full animate-spin" />
-                  <p className="font-mono text-xs text-muted2">Loading full 714+ token catalog…</p>
+                  <p className="font-mono text-xs text-muted2">Loading asset registry…</p>
                 </div>
-              ) : filteredAssets.length === 0 ? (
+              ) : displayedAssets.length === 0 ? (
                 <div className="py-12 text-center font-mono text-xs text-muted2">
                   No assets match "{searchTerm}"
                 </div>
               ) : (
-                filteredAssets.map((token) => {
+                displayedAssets.map((token) => {
                   const isSelected = token.symbol === currentSymbol;
                   return (
                     <button
@@ -159,7 +240,6 @@ export default function AssetPickerModal({
                             alt={token.symbol}
                             className="w-7 h-7 rounded-full object-cover shrink-0 border border-hairline"
                             onError={(e) => {
-                              // Fallback if image fails to load
                               (e.target as HTMLElement).style.display = "none";
                             }}
                           />
@@ -199,10 +279,12 @@ export default function AssetPickerModal({
               )}
             </div>
 
-            {/* Modal Footer with total count */}
+            {/* Modal Footer with total count & status */}
             <div className="pt-3 mt-2 border-t border-hairline flex items-center justify-between text-[11px] font-mono text-muted2">
-              <span>{allAssets.length} total available assets</span>
-              <span>Atomic settlement</span>
+              <span>
+                Showing {displayedAssets.length} of {allAssets.length || 714} assets
+              </span>
+              <span className="capitalize">{activeTab} Mode</span>
             </div>
           </motion.div>
         </div>
