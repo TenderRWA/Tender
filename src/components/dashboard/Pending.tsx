@@ -22,6 +22,7 @@ import {
   useElectionQuote,
   useSettlePortfolio,
   useConfirmPendingSettlement,
+  useDismissPendingSettlement,
   type SettlementLegResult,
 } from "@/hooks/useTender";
 import type { PendingSettlementRecord } from "@/types/tender";
@@ -52,9 +53,12 @@ type FilterTab = "all" | "x_bot" | "invoices";
 export default function Pending() {
   const { handle } = useTenderSession();
   const { address: wallet } = useWallet();
+  const dismiss = useDismissPendingSettlement();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [selectedSettlement, setSelectedSettlement] = useState<PendingSettlementRecord | null>(null);
+  const [settlementToDismiss, setSettlementToDismiss] = useState<PendingSettlementRecord | null>(null);
+  const [dismissSuccessModal, setDismissSuccessModal] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
 
   // 1. Fetch pending settlements from X bot
@@ -62,7 +66,7 @@ export default function Pending() {
     handle: handle || undefined,
     status: "all",
   });
-  const botSettlements = botData?.pendingSettlements ?? [];
+  const botSettlements = (botData?.pendingSettlements ?? []).filter((s) => s.status !== "dismissed");
 
   // 2. Fetch pending invoices
   const { data: invData, isLoading: invLoading } = useInvoices({
@@ -257,14 +261,24 @@ export default function Pending() {
                           <span className="font-mono text-xs text-muted2">Settled</span>
                         )
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSettlement(s)}
-                          className="px-3 py-1.5 rounded-lg bg-red hover:bg-red-hover text-white font-mono text-xs uppercase tracking-[0.08em] font-semibold transition-all shadow-xs hover:-translate-y-0.5 cursor-pointer flex items-center gap-1.5 ml-auto"
-                        >
-                          <span>Review & Sign</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSettlementToDismiss(s)}
+                            className="px-2.5 py-1.5 rounded-lg border border-hairline hover:bg-base text-muted2 hover:text-foreground font-mono text-xs uppercase tracking-[0.08em] font-medium transition-all cursor-pointer"
+                            title="Dismiss to unclutter view"
+                          >
+                            Dismiss
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSettlement(s)}
+                            className="px-3 py-1.5 rounded-lg bg-red hover:bg-red-hover text-white font-mono text-xs uppercase tracking-[0.08em] font-semibold transition-all shadow-xs hover:-translate-y-0.5 cursor-pointer flex items-center gap-1.5"
+                          >
+                            <span>Review & Sign</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                     </DashCell>
                   </DashRow>
@@ -371,6 +385,127 @@ export default function Pending() {
             onClose={() => setSelectedSettlement(null)}
             onOpenWallet={() => setWalletModalOpen(true)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Dismiss Confirmation Modal */}
+      <AnimatePresence>
+        {settlementToDismiss && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="glass rounded-3xl p-6 sm:p-8 max-w-md w-full border border-hairline shadow-2xl relative space-y-5"
+            >
+              <div className="flex items-center justify-between border-b border-hairline pb-4">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-red">■</span>
+                  <span className="font-mono text-xs uppercase tracking-[0.14em] text-secondary2">
+                    DISMISS SETTLEMENT
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSettlementToDismiss(null)}
+                  className="p-1.5 rounded-full hover:bg-ink/5 text-muted2 hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <p className="font-body text-sm text-foreground">
+                  Remove this pending transaction from your active queue?
+                </p>
+                <div className="p-3.5 rounded-2xl glass-soft border border-hairline/80 space-y-2 text-left">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-muted2">Recipient</span>
+                    <span className="text-foreground font-semibold">@{settlementToDismiss.recipientHandle}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-muted2">Amount</span>
+                    <span className="text-foreground font-semibold">
+                      {formatAmount(settlementToDismiss.inputAmount)} {settlementToDismiss.inputToken}
+                    </span>
+                  </div>
+                  {settlementToDismiss.authorXHandle && (
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-muted2">Source</span>
+                      <span className="text-foreground">@{settlementToDismiss.authorXHandle}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="font-body text-xs text-muted2">
+                  Dismissing removes this request from your queue to keep your dashboard clean. No on-chain funds will be moved.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSettlementToDismiss(null)}
+                  className="w-1/2 py-3 rounded-xl border border-hairline hover:bg-base text-foreground font-mono text-xs uppercase tracking-[0.1em] font-medium transition-all cursor-pointer"
+                >
+                  Keep Request
+                </button>
+                <button
+                  type="button"
+                  disabled={dismiss.isPending}
+                  onClick={() => {
+                    const id = settlementToDismiss.id;
+                    dismiss.mutate(
+                      { id },
+                      {
+                        onSuccess: () => {
+                          setSettlementToDismiss(null);
+                          setDismissSuccessModal(true);
+                        },
+                      }
+                    );
+                  }}
+                  className="w-1/2 py-3 rounded-xl bg-red hover:bg-red-hover text-white font-mono text-xs uppercase tracking-[0.1em] font-semibold transition-all shadow-xs hover:-translate-y-0.5 cursor-pointer disabled:opacity-50"
+                >
+                  {dismiss.isPending ? "Dismissing…" : "Dismiss"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Dismiss Success Modal */}
+      <AnimatePresence>
+        {dismissSuccessModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="glass rounded-3xl p-6 sm:p-8 max-w-sm w-full border border-hairline shadow-2xl text-center space-y-5"
+            >
+              <div className="w-14 h-14 rounded-full bg-success/15 border border-success/30 flex items-center justify-center mx-auto text-success">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="font-display text-lg font-bold text-foreground">
+                  Settlement Dismissed
+                </h3>
+                <p className="font-body text-xs text-muted2">
+                  The request has been removed from your active queue.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDismissSuccessModal(false)}
+                className="w-full py-3 rounded-xl bg-foreground text-background font-mono text-xs uppercase tracking-[0.1em] font-semibold hover:bg-foreground/90 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
