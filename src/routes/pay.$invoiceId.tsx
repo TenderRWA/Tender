@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, Clock, ExternalLink, ShieldCheck, ArrowRight, AlertCircle } from "lucide-react";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
+import WalletModal from "@/components/wallet/WalletModal";
 import { useWallet } from "@/lib/wallet/wallet-context";
 import {
   useInvoice,
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/pay/$invoiceId")({
 function InvoiceCheckoutPage() {
   const { invoiceId } = Route.useParams();
   const { address: wallet } = useWallet();
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
 
   const { data, isLoading, error } = useInvoice(invoiceId);
   const invoice = data?.invoice;
@@ -27,21 +29,13 @@ function InvoiceCheckoutPage() {
   // Payment token is strictly locked to the invoice's denomination (USDC or SOL)
   const payToken = invoice?.tokenSymbol?.toUpperCase() === "SOL" ? "SOL" : "USDC";
 
-  const inputMint = useMemo(() => {
-    if (payToken === "SOL") {
-      return "So11111111111111111111111111111111111111112";
-    }
-    // Default to USDC
-    return "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-  }, [payToken]);
-
   // Quote the invoice amount into the recipient's portfolio
   const amountToPay = invoice ? Number(invoice.amount) : 0;
   const quote = useElectionQuote({
-    handle: invoice?.recipientHandle ?? "",
-    amount: amountToPay,
-    inputMint,
-    enabled: Boolean(invoice && invoice.status === "pending" && amountToPay > 0),
+    recipientHandle: invoice?.recipientHandle ?? "",
+    fromSymbolOrMint: payToken,
+    amountIn: amountToPay,
+    userWallet: wallet || undefined,
   });
 
   const settle = useSettlePortfolio();
@@ -53,20 +47,26 @@ function InvoiceCheckoutPage() {
   const isPaid = invoice?.status === "paid" || Boolean(settledTx);
   const activeSignature = settledTx || invoice?.signature;
 
+  const hasLegs = Boolean(quote.data?.portfolioResult?.legs?.length);
   const canPay =
     Boolean(wallet) &&
     !isPaid &&
     !isExpired &&
     !settle.isPending &&
-    Boolean(quote.data?.portfolioResult?.legs?.length);
+    hasLegs;
 
   const handlePay = () => {
+    if (!wallet) {
+      setWalletModalOpen(true);
+      return;
+    }
     if (!canPay || !quote.data) return;
 
     settle.mutate(
       {
-        quoteResponse: quote.data,
-        payerTokenSymbol: payToken,
+        quote: quote.data,
+        userWallet: wallet,
+        recipientHandle: invoice?.recipientHandle,
       },
       {
         onSuccess: (result) => {
@@ -316,11 +316,11 @@ function InvoiceCheckoutPage() {
                   {/* Pay Button */}
                   <button
                     type="button"
-                    disabled={!canPay}
+                    disabled={wallet ? !canPay : false}
                     onClick={handlePay}
                     className={`w-full py-4 rounded-xl font-body font-semibold text-sm uppercase tracking-[0.08em] transition-all flex items-center justify-center gap-2 ${
-                      canPay
-                        ? "bg-red hover:bg-red-hover text-white shadow-md hover:-translate-y-0.5"
+                      !wallet || canPay
+                        ? "bg-red hover:bg-red-hover text-white shadow-md hover:-translate-y-0.5 cursor-pointer"
                         : "bg-hairline text-muted2 cursor-not-allowed"
                     }`}
                   >
@@ -330,14 +330,27 @@ function InvoiceCheckoutPage() {
                         <span>Signing & Settling…</span>
                       </>
                     ) : !wallet ? (
-                      "Connect Wallet to Pay"
+                      "Connect Wallet to Settle"
+                    ) : quote.isFetching ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        <span>Quoting Route…</span>
+                      </>
                     ) : (
                       <>
-                        <span>Settle Invoice</span>
+                        <span>Settle Invoice ({invoice.amount} {payToken})</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
                   </button>
+
+                  {quote.isError && (
+                    <div className="p-3 rounded-lg bg-red/10 border border-red/30">
+                      <p className="font-mono text-xs text-red">
+                        Route Quote Error: {quote.error.message}
+                      </p>
+                    </div>
+                  )}
 
                   {settle.isError && (
                     <div className="p-3 rounded-lg bg-red/10 border border-red/30">
@@ -356,6 +369,8 @@ function InvoiceCheckoutPage() {
           </div>
         </div>
       </div>
+
+      <WalletModal open={walletModalOpen} onClose={() => setWalletModalOpen(false)} />
     </main>
   );
 }
