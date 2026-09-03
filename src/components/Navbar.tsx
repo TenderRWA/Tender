@@ -5,11 +5,14 @@ import { scrollToHash } from "@/lib/lenis";
 import { useComingSoon } from "@/components/ComingSoonModal";
 import TerminalControls from "@/components/dashboard/TerminalControls";
 
-const NAV_LINKS: { label: string; to: string }[] = [
+/** `newTab` links are plain anchors: reading the doc shouldn't lose the page
+    the visitor was already on. */
+const NAV_LINKS: { label: string; to: string; newTab?: boolean }[] = [
   { label: "Home", to: "/#top" },
   { label: "Work", to: "/work" },
   { label: "Services", to: "/services" },
   { label: "Pricing", to: "/pricing" },
+  { label: "Whitepaper", to: "/whitepaper", newTab: true },
   { label: "Dashboard", to: "/dashboard" },
   { label: "Contact", to: "/contact" },
 ];
@@ -194,42 +197,72 @@ export default function Navbar() {
               </div>
 
               <nav className="flex flex-1 flex-col justify-center gap-0.5 px-10 py-6 md:px-14">
-                {NAV_LINKS.map((link, i) => (
-                  <motion.button
-                    key={link.label}
-                    initial={{ y: 60, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.15 + i * 0.06, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                    onClick={() => go(link.to)}
-                    aria-current={isActive(link.to) ? "page" : undefined}
-                    className="group flex w-fit items-baseline gap-5 py-1.5 text-left"
-                  >
-                    <span
-                      className={`font-mono text-[12px] tabular-nums transition-colors duration-200 ${
-                        isActive(link.to) ? "text-white" : "text-white/45 group-hover:text-white/75"
-                      }`}
-                    >
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span
-                      className={`flex items-center gap-3.5 font-display text-[clamp(30px,3.6vw,42px)] leading-[1.08] font-semibold tracking-[-0.03em] transition-colors duration-200 group-hover:text-white ${
-                        isActive(link.to) ? "text-white" : "text-white/80"
-                      }`}
-                    >
-                      {link.label}
+                {NAV_LINKS.map((link, i) => {
+                  const active = isActive(link.to);
+                  const shared = {
+                    initial: { y: 60, opacity: 0 },
+                    animate: { y: 0, opacity: 1 },
+                    transition: {
+                      delay: 0.15 + i * 0.06,
+                      duration: 0.5,
+                      ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
+                    },
+                    className: "group flex w-fit items-baseline gap-5 py-1.5 text-left",
+                  };
+                  const inner = (
+                    <>
                       <span
-                        aria-hidden
-                        className={`text-[0.5em] transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 ${
-                          isActive(link.to)
-                            ? "translate-x-0 opacity-100"
-                            : "-translate-x-3 opacity-0"
+                        className={`font-mono text-[12px] tabular-nums transition-colors duration-200 ${
+                          active ? "text-white" : "text-white/45 group-hover:text-white/75"
                         }`}
                       >
-                        →
+                        {String(i + 1).padStart(2, "0")}
                       </span>
-                    </span>
-                  </motion.button>
-                ))}
+                      <span
+                        className={`flex items-center gap-3.5 font-display text-[clamp(30px,3.6vw,42px)] leading-[1.08] font-semibold tracking-[-0.03em] transition-colors duration-200 group-hover:text-white ${
+                          active ? "text-white" : "text-white/80"
+                        }`}
+                      >
+                        {link.label}
+                        <span
+                          aria-hidden
+                          className={`text-[0.5em] transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 ${
+                            // A new-tab link keeps its cue visible: the ↗ is what
+                            // tells you the page won't replace this one.
+                            active || link.newTab
+                              ? "translate-x-0 opacity-100"
+                              : "-translate-x-3 opacity-0"
+                          }`}
+                        >
+                          {link.newTab ? "↗" : "→"}
+                        </span>
+                      </span>
+                    </>
+                  );
+
+                  return link.newTab ? (
+                    <motion.a
+                      key={link.label}
+                      href={link.to}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setOpen(false)}
+                      {...shared}
+                    >
+                      {inner}
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </motion.a>
+                  ) : (
+                    <motion.button
+                      key={link.label}
+                      onClick={() => go(link.to)}
+                      aria-current={active ? "page" : undefined}
+                      {...shared}
+                    >
+                      {inner}
+                    </motion.button>
+                  );
+                })}
                 <motion.div
                   initial={{ y: 60, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}

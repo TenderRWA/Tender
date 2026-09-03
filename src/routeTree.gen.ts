@@ -15,12 +15,14 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as TeamRouteImport } from './routes/team'
+import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as WorkRouteImport } from './routes/work'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
 import { Route as DashboardClaimRouteImport } from './routes/dashboard.claim'
 import { Route as DashboardElectionsRouteImport } from './routes/dashboard.elections'
 import { Route as DashboardInvoicesRouteImport } from './routes/dashboard.invoices'
 import { Route as DashboardPaymentsRouteImport } from './routes/dashboard.payments'
+import { Route as DashboardPendingRouteImport } from './routes/dashboard.pending'
 import { Route as DashboardUniverseRouteImport } from './routes/dashboard.universe'
 import { Route as PayInvoiceIdRouteImport } from './routes/pay.$invoiceId'
 
@@ -54,6 +56,11 @@ const TeamRoute = TeamRouteImport.update({
   path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WhitepaperRoute = WhitepaperRouteImport.update({
+  id: '/whitepaper',
+  path: '/whitepaper',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WorkRoute = WorkRouteImport.update({
   id: '/work',
   path: '/work',
@@ -84,6 +91,11 @@ const DashboardPaymentsRoute = DashboardPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardPendingRoute = DashboardPendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardUniverseRoute = DashboardUniverseRouteImport.update({
   id: '/universe',
   path: '/universe',
@@ -102,11 +114,13 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/services': typeof ServicesRoute
   '/team': typeof TeamRoute
+  '/whitepaper': typeof WhitepaperRoute
   '/work': typeof WorkRoute
   '/dashboard/claim': typeof DashboardClaimRoute
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
+  '/dashboard/pending': typeof DashboardPendingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -117,11 +131,13 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/services': typeof ServicesRoute
   '/team': typeof TeamRoute
+  '/whitepaper': typeof WhitepaperRoute
   '/work': typeof WorkRoute
   '/dashboard/claim': typeof DashboardClaimRoute
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
+  '/dashboard/pending': typeof DashboardPendingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -134,11 +150,13 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/services': typeof ServicesRoute
   '/team': typeof TeamRoute
+  '/whitepaper': typeof WhitepaperRoute
   '/work': typeof WorkRoute
   '/dashboard/claim': typeof DashboardClaimRoute
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
+  '/dashboard/pending': typeof DashboardPendingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -152,11 +170,13 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/services'
     | '/team'
+    | '/whitepaper'
     | '/work'
     | '/dashboard/claim'
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
+    | '/dashboard/pending'
     | '/dashboard/universe'
     | '/pay/$invoiceId'
     | '/dashboard/'
@@ -167,11 +187,13 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/services'
     | '/team'
+    | '/whitepaper'
     | '/work'
     | '/dashboard/claim'
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
+    | '/dashboard/pending'
     | '/dashboard/universe'
     | '/pay/$invoiceId'
     | '/dashboard'
@@ -183,11 +205,13 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/services'
     | '/team'
+    | '/whitepaper'
     | '/work'
     | '/dashboard/claim'
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
+    | '/dashboard/pending'
     | '/dashboard/universe'
     | '/pay/$invoiceId'
     | '/dashboard/'
@@ -200,6 +224,7 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   ServicesRoute: typeof ServicesRoute
   TeamRoute: typeof TeamRoute
+  WhitepaperRoute: typeof WhitepaperRoute
   WorkRoute: typeof WorkRoute
   PayInvoiceIdRoute: typeof PayInvoiceIdRoute
 }
@@ -248,6 +273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/whitepaper': {
+      id: '/whitepaper'
+      path: '/whitepaper'
+      fullPath: '/whitepaper'
+      preLoaderRoute: typeof WhitepaperRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/work': {
       id: '/work'
       path: '/work'
@@ -290,6 +322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPaymentsRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/pending': {
+      id: '/dashboard/pending'
+      path: '/pending'
+      fullPath: '/dashboard/pending'
+      preLoaderRoute: typeof DashboardPendingRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/universe': {
       id: '/dashboard/universe'
       path: '/universe'
@@ -312,6 +351,7 @@ interface DashboardRouteChildren {
   DashboardElectionsRoute: typeof DashboardElectionsRoute
   DashboardInvoicesRoute: typeof DashboardInvoicesRoute
   DashboardPaymentsRoute: typeof DashboardPaymentsRoute
+  DashboardPendingRoute: typeof DashboardPendingRoute
   DashboardUniverseRoute: typeof DashboardUniverseRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
@@ -321,6 +361,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardElectionsRoute: DashboardElectionsRoute,
   DashboardInvoicesRoute: DashboardInvoicesRoute,
   DashboardPaymentsRoute: DashboardPaymentsRoute,
+  DashboardPendingRoute: DashboardPendingRoute,
   DashboardUniverseRoute: DashboardUniverseRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
@@ -336,6 +377,7 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   ServicesRoute: ServicesRoute,
   TeamRoute: TeamRoute,
+  WhitepaperRoute: WhitepaperRoute,
   WorkRoute: WorkRoute,
   PayInvoiceIdRoute: PayInvoiceIdRoute,
 }

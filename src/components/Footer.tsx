@@ -19,10 +19,11 @@ function TelegramIcon({ className }: { className?: string }) {
 }
 
 /** One lean row of real destinations — no placeholder or duplicate links. */
-const LINKS: { label: string; to: string }[] = [
+const LINKS: { label: string; to: string; newTab?: boolean }[] = [
   { label: "Work", to: "/work" },
   { label: "Services", to: "/services" },
   { label: "Pricing", to: "/pricing" },
+  { label: "Whitepaper", to: "/whitepaper", newTab: true },
   { label: "Contact", to: "/contact" },
   { label: "Terms", to: "/contact#terms" },
 ];
@@ -63,12 +64,27 @@ export default function Footer() {
             <ul className="flex flex-wrap items-center gap-x-6 gap-y-3">
               {LINKS.map((l) => (
                 <li key={l.label}>
-                  <button
-                    onClick={() => go(l.to)}
-                    className="font-body text-[15px] text-secondary2 hover:text-red transition-colors duration-150"
-                  >
-                    {l.label}
-                  </button>
+                  {l.newTab ? (
+                    <a
+                      href={l.to}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 font-body text-[15px] text-secondary2 hover:text-red transition-colors duration-150"
+                    >
+                      {l.label}
+                      <span aria-hidden className="text-[0.75em]">
+                        ↗
+                      </span>
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() => go(l.to)}
+                      className="font-body text-[15px] text-secondary2 hover:text-red transition-colors duration-150"
+                    >
+                      {l.label}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -444,3 +444,33 @@ body {
   mask-composite: exclude;
   pointer-events: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Print — "Print / save as PDF" on the whitepaper.
+
+   Scroll-triggered reveals leave off-screen sections at opacity 0, which would
+   otherwise print as blank pages, so entrance transforms are forced open here.
+--------------------------------------------------------------------------- */
+@media print {
+  header,
+  footer,
+  [data-print-hide] {
+    display: none !important;
+  }
+  main {
+    padding-top: 0 !important;
+  }
+  [data-wp-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  figure,
+  table,
+  h2 {
+    break-inside: avoid;
+  }
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+}
