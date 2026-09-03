@@ -96,11 +96,78 @@ export async function routeBotIntent(params: {
     };
   }
 
-  // 3. Unrecognized action
+  // 3. Invoice action
+  if (intent.action === "invoice" && intent.target && intent.amount) {
+    const payerHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
+    const tokenSymbol = (intent.token || "USDC").toUpperCase();
+    const token = resolveSolanaToken(tokenSymbol);
+    const finalMint = token?.mint || "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const finalSymbol = token?.symbol || "USDC";
+
+    // Lookup author in registry to be the recipient of the invoice funds
+    const cleanAuthor = authorHandle ? authorHandle.toLowerCase().replace(/^@/, "").trim() : "";
+    let recipientHandle = cleanAuthor;
+    let recipientWallet = "";
+
+    if (cleanAuthor) {
+      const authorRes = await query(
+        "SELECT handle, owner_wallet FROM handles WHERE handle = $1 OR LOWER(x_username) = $1 LIMIT 1",
+        [cleanAuthor]
+      );
+      if (authorRes.rows && authorRes.rows.length > 0) {
+        recipientHandle = authorRes.rows[0].handle;
+        recipientWallet = authorRes.rows[0].owner_wallet;
+      }
+    }
+
+    if (!recipientWallet) {
+      return {
+        replyText: `@${cleanAuthor || "there"} you haven't claimed your handle on TENDER yet to issue invoices. Tap the link in my bio to register.`,
+        recipientHandle: cleanAuthor,
+        recipientWallet: "",
+        isRegistered: false,
+      };
+    }
+
+    const invoiceId = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    try {
+      await query(
+        `INSERT INTO invoices (
+          id, recipient_handle, recipient_wallet, amount, token_mint, token_symbol, memo, status, expires_at, creator_wallet, creator_handle
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10)`,
+        [
+          invoiceId,
+          recipientHandle,
+          recipientWallet,
+          intent.amount,
+          finalMint,
+          finalSymbol,
+          intent.memo || null,
+          expiresAt,
+          recipientWallet,
+          recipientHandle,
+        ]
+      );
+    } catch (err: any) {
+      console.error("[Bot Routing] Error creating invoice from tweet:", err);
+    }
+
+    const memoPart = intent.memo ? ` · Memo: ${intent.memo}` : "";
+    return {
+      replyText: `Invoice recorded for @${payerHandle} (${intent.amount} ${finalSymbol}${memoPart}). Tap the link in my bio to view and pay.`,
+      recipientHandle,
+      recipientWallet,
+      isRegistered: true,
+    };
+  }
+
+  // 4. Unrecognized action
   if (intent.action === "unrecognized" || !intent.target || !intent.amount) {
     return {
       replyText:
-        "Couldn't identify a payment recipient or amount. Try: '@TenderRWABot pay @handle 50 USDC' or '@TenderRWABot election @handle'. Tap the link in my bio to open the terminal.",
+        "Couldn't identify a payment recipient or amount. Try: '@TenderRWABot pay @handle 50 USDC', '@TenderRWABot quote 100 USDC for @handle', or '@TenderRWABot mix @handle'. Tap the link in my bio to open the terminal.",
       recipientHandle: "",
       recipientWallet: "",
       isRegistered: false,
