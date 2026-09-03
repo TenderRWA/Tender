@@ -1,6 +1,8 @@
 import {
   SolanaSignAndSendTransaction,
+  SolanaSignMessage,
   type SolanaSignAndSendTransactionFeature,
+  type SolanaSignMessageFeature,
 } from "@solana/wallet-standard-features";
 import type { IdentifierString } from "@wallet-standard/base";
 import { StandardDisconnect, type StandardDisconnectFeature } from "@wallet-standard/features";
@@ -64,12 +66,15 @@ interface WalletContextValue {
   wallets: readonly UiWallet[];
   account: UiWalletAccount | null;
   address: string | null;
+  connected: boolean;
   walletName: string | null;
   walletIcon: string | null;
   select: (account: UiWalletAccount) => void;
   disconnect: () => Promise<void>;
   /** Signs and broadcasts a backend-assembled transaction; resolves to its base58 signature. */
   signAndSendBase64: (base64Transaction: string) => Promise<string>;
+  /** Cryptographically signs an arbitrary utf-8 message for authentication proof. */
+  signMessage: (message: string) => Promise<string>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -148,18 +153,53 @@ export function TenderWalletProvider({ children }: { children: ReactNode }) {
     [account],
   );
 
+  const signMessage = useCallback(
+    async (message: string): Promise<string> => {
+      if (!account) throw new Error("Connect a wallet before signing.");
+
+      const feature = getWalletAccountFeature(
+        account,
+        SolanaSignMessage,
+      ) as SolanaSignMessageFeature[typeof SolanaSignMessage] | undefined;
+
+      const messageBytes = new TextEncoder().encode(message);
+
+      if (feature) {
+        const [output] = await feature.signMessage({
+          account: getWalletAccountForUiWalletAccount(account),
+          message: messageBytes,
+        });
+        if (!output?.signature) throw new Error("Wallet returned no signature.");
+        return bytesToBase58(output.signature);
+      }
+
+      // Legacy fallback for window.solana (Phantom / Backpack)
+      const solana = typeof window !== "undefined" ? (window as any).solana : null;
+      if (solana && typeof solana.signMessage === "function") {
+        const res = await solana.signMessage(messageBytes, "utf8");
+        const sigBytes = res.signature || res;
+        return bytesToBase58(sigBytes);
+      }
+
+      throw new Error("Connected wallet does not support cryptographic message signing.");
+    },
+    [account],
+  );
+
   const value = useMemo<WalletContextValue>(
     () => ({
       wallets,
       account,
       address: account?.address ?? null,
+      connected: Boolean(account?.address),
       walletName: account ? getWalletForHandle(account).name : null,
       walletIcon: account ? getWalletForHandle(account).icon : null,
       select,
       disconnect,
       signAndSendBase64,
+      signMessage,
     }),
-    [wallets, account, select, disconnect, signAndSendBase64],
+    [wallets, account, select, disconnect, signAndSendBase64, signMessage],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
