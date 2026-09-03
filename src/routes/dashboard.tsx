@@ -41,7 +41,7 @@ function DashboardLayout() {
     }
   }, []);
 
-  const isWalletConnected = Boolean(connected && address);
+  const isWalletConnected = Boolean(address);
   const isXBound = Boolean(xData?.linked);
 
   return (
