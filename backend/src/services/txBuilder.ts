@@ -1,11 +1,17 @@
 import {
   Connection,
   PublicKey,
+  SystemProgram,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
   AddressLookupTableAccount,
 } from "@solana/web3.js";
+import {
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createTransferCheckedInstruction,
+} from "@solana/spl-token";
 import { config } from "../config";
 import { fetchJupiterSwapInstructions, type JupiterQuoteResponse } from "./jupiterService";
 import type { DualQuoteResult, PortfolioQuoteResult } from "./dualQuoteEngine";
@@ -50,6 +56,7 @@ export async function buildAtomicJupiterSwapTx(params: {
   userWallet: string;
   quote: JupiterQuoteResponse;
   destinationTokenAccount?: string;
+  prependInstructions?: TransactionInstruction[];
 }): Promise<{ base64Transaction: string; addressLookupTableAddresses: string[] }> {
   const swapInstructions = await fetchJupiterSwapInstructions({
     quoteResponse: params.quote,
@@ -59,6 +66,11 @@ export async function buildAtomicJupiterSwapTx(params: {
   });
 
   const instructions: TransactionInstruction[] = [];
+
+  // 0. Prepend instructions (e.g. creating recipient's ATA)
+  if (params.prependInstructions && params.prependInstructions.length > 0) {
+    instructions.push(...params.prependInstructions);
+  }
 
   // 1. Compute budget instructions
   if (swapInstructions.computeBudgetInstructions) {
@@ -106,6 +118,69 @@ export async function buildAtomicJupiterSwapTx(params: {
   };
 }
 
+export async function buildDirectTransferTx(params: {
+  userWallet: string;
+  recipientWallet: string;
+  tokenMint: string;
+  amount: string;
+  decimals: number;
+}): Promise<{ base64Transaction: string }> {
+  const userPubkey = new PublicKey(params.userWallet);
+  const recipientPubkey = new PublicKey(params.recipientWallet);
+  const instructions: TransactionInstruction[] = [];
+
+  const isNativeSol =
+    params.tokenMint === "11111111111111111111111111111111" ||
+    params.tokenMint === "So11111111111111111111111111111111111111112";
+
+  if (isNativeSol) {
+    instructions.push(
+      SystemProgram.transfer({
+        fromPubkey: userPubkey,
+        toPubkey: recipientPubkey,
+        lamports: BigInt(params.amount),
+      })
+    );
+  } else {
+    const mintPubkey = new PublicKey(params.tokenMint);
+    const sourceAta = getAssociatedTokenAddressSync(mintPubkey, userPubkey);
+    const destAta = getAssociatedTokenAddressSync(mintPubkey, recipientPubkey, true);
+
+    instructions.push(
+      createAssociatedTokenAccountIdempotentInstruction(
+        userPubkey,
+        destAta,
+        recipientPubkey,
+        mintPubkey
+      )
+    );
+
+    instructions.push(
+      createTransferCheckedInstruction(
+        sourceAta,
+        mintPubkey,
+        destAta,
+        userPubkey,
+        BigInt(params.amount),
+        params.decimals
+      )
+    );
+  }
+
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
+
+  const messageV0 = new TransactionMessage({
+    payerKey: userPubkey,
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message();
+
+  const transaction = new VersionedTransaction(messageV0);
+  const serialized = Buffer.from(transaction.serialize()).toString("base64");
+
+  return { base64Transaction: serialized };
+}
+
 export async function buildSettlementTxPlan(params: {
   userWallet: string;
   recipientWallet: string;
@@ -121,10 +196,56 @@ export async function buildSettlementTxPlan(params: {
     priceImpactPct: number;
   };
 }> {
+  const inMint = params.quote.inputToken?.mint;
+  const outMint = params.quote.outputToken?.mint;
+
+  // 1. Direct same-asset transfer (e.g. USDC -> USDC or SOL -> SOL)
+  if (inMint && outMint && inMint === outMint) {
+    const { base64Transaction } = await buildDirectTransferTx({
+      userWallet: params.userWallet,
+      recipientWallet: params.recipientWallet,
+      tokenMint: inMint,
+      amount: params.quote.inAmount,
+      decimals: params.quote.inputToken?.decimals ?? 6,
+    });
+
+    return {
+      provider: "jupiter",
+      base64Transaction,
+      details: {
+        inAmount: params.quote.inAmount,
+        outAmount: params.quote.outAmount,
+        rate: params.quote.rate,
+        priceImpactPct: 0,
+      },
+    };
+  }
+
+  // 2. Jupiter atomic swap with direct destination ATA routing
   if (params.quote.winner === "jupiter" && params.quote.rawWinnerQuote.jupiterQuote) {
+    const userPubkey = new PublicKey(params.userWallet);
+    const recipientPubkey = new PublicKey(params.recipientWallet);
+    const resolvedOutMint = new PublicKey(
+      outMint || params.quote.rawWinnerQuote.jupiterQuote.outputMint
+    );
+
+    const recipientAta = getAssociatedTokenAddressSync(resolvedOutMint, recipientPubkey, true);
+
+    // Prepend idempotent ATA creation for recipient so Jupiter has an existing destination ATA
+    const prependInstructions = [
+      createAssociatedTokenAccountIdempotentInstruction(
+        userPubkey,
+        recipientAta,
+        recipientPubkey,
+        resolvedOutMint
+      ),
+    ];
+
     const { base64Transaction } = await buildAtomicJupiterSwapTx({
       userWallet: params.userWallet,
       quote: params.quote.rawWinnerQuote.jupiterQuote,
+      destinationTokenAccount: recipientAta.toBase58(),
+      prependInstructions,
     });
 
     return {

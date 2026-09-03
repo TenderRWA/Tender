@@ -184,6 +184,7 @@ export interface SettlementResult {
  * transaction and are reported back untouched.
  */
 export function useSettlePortfolio() {
+  const queryClient = useQueryClient();
   const { signAndSendBase64 } = useWallet();
 
   return useMutation<
