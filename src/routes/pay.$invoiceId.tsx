@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   CheckCircle2,
   Clock,
@@ -11,11 +11,11 @@ import {
   ArrowLeft,
   Copy,
   Check,
-  Zap,
   Lock,
 } from "lucide-react";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
 import WalletModal from "@/components/wallet/WalletModal";
+import { StatusPill } from "@/components/dashboard/DashTable";
 import { useWallet } from "@/lib/wallet/wallet-context";
 import {
   useInvoice,
@@ -31,20 +31,12 @@ export const Route = createFileRoute("/pay/$invoiceId")({
 const truncate = (val: string, len = 12) =>
   val.length > len ? `${val.slice(0, 6)}…${val.slice(-4)}` : val;
 
-const SEGMENT_COLORS = [
-  "bg-red",
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-purple-500",
-  "bg-amber-500",
-  "bg-cyan-500",
-];
-
 function InvoiceCheckoutPage() {
   const { invoiceId } = Route.useParams();
   const { address: wallet } = useWallet();
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [copiedTx, setCopiedTx] = useState(false);
+  const [copiedWallet, setCopiedWallet] = useState(false);
 
   const { data, isLoading, error } = useInvoice(invoiceId);
   const invoice = data?.invoice;
@@ -103,19 +95,25 @@ function InvoiceCheckoutPage() {
     );
   };
 
-  const copyToClipboard = (text: string) => {
+  const copySignature = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedTx(true);
     setTimeout(() => setCopiedTx(false), 2000);
   };
 
+  const copyRecipientWallet = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedWallet(true);
+    setTimeout(() => setCopiedWallet(false), 2000);
+  };
+
   if (isLoading) {
     return (
-      <main className="min-h-[85vh] flex items-center justify-center p-6">
+      <main className="min-h-[85vh] pt-32 pb-16 flex items-center justify-center p-6">
         <div className="text-center space-y-4">
           <div className="w-8 h-8 mx-auto border-2 border-hairline border-t-red rounded-full animate-spin" />
           <p className="font-mono text-xs text-muted2 uppercase tracking-[0.14em]">
-            Verifying Invoice On-Chain Rail…
+            Reading invoice from rail…
           </p>
         </div>
       </main>
@@ -124,18 +122,18 @@ function InvoiceCheckoutPage() {
 
   if (error || !invoice) {
     return (
-      <main className="min-h-[85vh] flex items-center justify-center p-6">
-        <div className="glass rounded-3xl p-8 max-w-md w-full text-center space-y-4 border border-red/30 shadow-2xl">
-          <AlertCircle className="w-12 h-12 text-red mx-auto" />
-          <h1 className="font-display text-2xl font-semibold text-foreground">Invoice Not Found</h1>
+      <main className="min-h-[85vh] pt-32 pb-16 flex items-center justify-center p-6">
+        <div className="glass rounded-2xl p-8 max-w-md w-full text-center space-y-4 border border-red/30 shadow-xl">
+          <AlertCircle className="w-10 h-10 text-red mx-auto" />
+          <h1 className="font-display text-xl font-medium text-foreground">Invoice Not Found</h1>
           <p className="font-body text-xs text-muted2 leading-relaxed">
             The requested invoice link does not exist, has expired, or is invalid on the TENDER rail.
           </p>
           <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-foreground text-background font-body text-xs font-semibold uppercase tracking-[0.1em] hover:bg-foreground/90 transition-all"
+            to="/dashboard/invoices"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-foreground text-background font-body text-xs font-semibold uppercase tracking-[0.1em] hover:bg-foreground/90 transition-all"
           >
-            <span>Return to Terminal</span>
+            <span>Return to Invoices</span>
           </Link>
         </div>
       </main>
@@ -143,161 +141,127 @@ function InvoiceCheckoutPage() {
   }
 
   return (
-    <main className="min-h-screen py-10 md:py-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto flex flex-col justify-center">
-      {/* Top Breadcrumb & Status Navigation */}
-      <div className="flex items-center justify-between pb-6 border-b border-hairline/80 mb-8 sm:mb-10">
+    <main className="min-h-[90vh] pt-28 md:pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto flex flex-col justify-start">
+      {/* Top Header & Breadcrumb Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-hairline/80 mb-8">
         <Link
           to="/dashboard/invoices"
-          className="inline-flex items-center gap-2 font-mono text-xs text-muted2 hover:text-foreground transition-colors group"
+          className="inline-flex items-center gap-2 font-mono text-xs text-secondary2 hover:text-red transition-colors group"
         >
-          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-          <span>TENDER TERMINAL</span>
+          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-1" />
+          <span className="uppercase tracking-[0.12em]">TENDER TERMINAL</span>
         </Link>
 
         <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-muted2 hidden sm:inline">
-            ID: {truncate(invoice.id, 16)}
+          <span className="font-mono text-xs text-muted2">
+            ID: <span className="text-foreground">{truncate(invoice.id, 16)}</span>
           </span>
-          {isPaid ? (
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-mono text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              SETTLED
-            </span>
-          ) : isExpired ? (
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-mono text-xs font-semibold bg-muted/20 text-muted2 border border-hairline">
-              EXPIRED
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full font-mono text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 shadow-xs">
-              <Clock className="w-3.5 h-3.5 animate-spin" />
-              PENDING SETTLEMENT
-            </span>
-          )}
+          <StatusPill status={isPaid ? "settled" : isExpired ? "expired" : "open"} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Recipient Spec & Portfolio Visualizer */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+        {/* Left Column: Payee Details & Portfolio Slicing Breakdown */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           {/* Main Invoice Card */}
-          <div className="glass rounded-3xl p-6 sm:p-8 space-y-6 border border-hairline/90 shadow-xl relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-secondary2 font-semibold">
-                PAYEE SPECIFICATION
+          <div className="glass glass-interactive rounded-2xl p-6 md:p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-hairline/60 pb-3">
+              <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+                <span className="w-1.5 h-1.5 bg-red shrink-0" aria-hidden />
+                PAYEE & SETTLEMENT SPEC
               </span>
               <span className="font-mono text-[10px] text-muted2">
-                Created {new Date(invoice.createdAt).toLocaleDateString()}
+                Issued {new Date(invoice.createdAt).toISOString().slice(0, 10)}
               </span>
             </div>
 
-            {/* Recipient Profile Card */}
-            <div className="flex items-start justify-between gap-4 pt-2">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red/20 to-red/5 border border-red/30 flex items-center justify-center font-display text-lg font-bold text-red shadow-xs">
+            {/* Recipient Profile */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-base border border-hairline flex items-center justify-center font-display text-lg font-bold text-foreground shrink-0 shadow-2xs">
                   {invoice.recipientHandle.slice(0, 1).toUpperCase()}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h2 className="font-display text-xl font-bold text-foreground">
+                    <span className="font-display text-lg font-bold text-foreground">
                       @{invoice.recipientHandle}
-                    </h2>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                      <ShieldCheck className="w-3 h-3" />
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-base border border-hairline text-[10px] font-mono text-success shrink-0">
+                      <ShieldCheck className="w-3 h-3 text-success" />
                       Verified
                     </span>
                   </div>
-                  <p className="font-mono text-[11px] text-muted2 mt-0.5 truncate max-w-[200px] sm:max-w-[260px]">
-                    {invoice.recipientWallet}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => copyRecipientWallet(invoice.recipientWallet)}
+                    title="Click to copy wallet address"
+                    className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted2 hover:text-foreground mt-0.5 transition-colors cursor-pointer"
+                  >
+                    <span>{truncate(invoice.recipientWallet, 12)}</span>
+                    {copiedWallet ? (
+                      <Check className="w-3 h-3 text-success" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-muted2" />
+                    )}
+                  </button>
                 </div>
               </div>
 
-              {/* Total Due Pill */}
-              <div className="text-right">
-                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted2 block">
+              <div className="text-right shrink-0">
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 block">
                   AMOUNT DUE
                 </span>
-                <div className="font-mono text-3xl sm:text-4xl font-black text-foreground tracking-tight mt-0.5">
+                <div className="font-mono text-2xl sm:text-3xl font-bold text-foreground mt-0.5">
                   {Number(invoice.amount).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 6,
                   })}
-                  <span className="text-red ml-1.5 text-xl font-bold">{payToken}</span>
+                  <span className="text-red ml-1.5 text-base font-semibold">{payToken}</span>
                 </div>
               </div>
             </div>
 
-            {/* Memo Note */}
+            {/* Memo Box */}
             {invoice.memo && (
-              <div className="p-4 rounded-2xl glass-soft border border-hairline/80 space-y-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted2 font-medium">
+              <div className="glass-soft rounded-xl p-4 border border-hairline/80 space-y-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 block">
                   MEMO / REFERENCE
                 </span>
                 <p className="font-body text-sm text-foreground font-medium">{invoice.memo}</p>
               </div>
             )}
 
-            {/* Due Date & Escrow-Free Notice */}
-            <div className="flex items-center justify-between pt-4 border-t border-hairline/80 font-mono text-xs text-muted2">
+            {/* Escrow Status & Due Date */}
+            <div className="flex items-center justify-between pt-4 border-t border-hairline/60 font-mono text-xs text-muted2">
               <span className="flex items-center gap-1.5">
                 <Lock className="w-3.5 h-3.5 text-muted2" />
                 Zero Escrow Custody
               </span>
               <span>
-                Due by:{" "}
-                <strong className="text-foreground">
-                  {new Date(invoice.expiresAt).toLocaleDateString()}
-                </strong>
+                Due: <strong className="text-foreground">{new Date(invoice.expiresAt).toISOString().slice(0, 10)}</strong>
               </span>
             </div>
           </div>
 
-          {/* Receive-Side Portfolio Allocation Visualizer */}
-          <div className="glass rounded-3xl p-6 sm:p-8 space-y-5 border border-hairline/90 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-secondary2 font-semibold block">
-                  RECEIVE-SIDE PORTFOLIO SLICING
-                </span>
-                <p className="font-body text-xs text-muted2 mt-0.5">
-                  Atomic split into @{invoice.recipientHandle}'s elected tokenized US stocks & cash
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-1 font-mono text-[10px] text-red font-semibold px-2 py-0.5 rounded-full bg-red/10 border border-red/20">
-                <Zap className="w-3 h-3" />
-                Live DEX Slicing
+          {/* Receive-Side Portfolio Slicing Visualizer */}
+          <div className="glass glass-interactive rounded-2xl p-6 md:p-8 space-y-5">
+            <div className="flex items-center justify-between border-b border-hairline/60 pb-3">
+              <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+                <span className="w-1.5 h-1.5 bg-red shrink-0" aria-hidden />
+                RECEIVE-SIDE PORTFOLIO SLICING
+              </span>
+              <span className="font-mono text-[10px] text-muted2">
+                Atomic Jupiter + Relay
               </span>
             </div>
 
-            {/* Visual Multi-Segment Progress Bar */}
-            {elections.length > 0 && (
-              <div className="space-y-2">
-                <div className="h-3 w-full rounded-full bg-base border border-hairline overflow-hidden flex shadow-inner">
-                  {elections.map((ele, idx) => {
-                    const widthPct = (ele.basisPoints / 100).toFixed(1);
-                    const colorClass = SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
-                    return (
-                      <div
-                        key={ele.symbol}
-                        style={{ width: `${widthPct}%` }}
-                        className={`${colorClass} h-full transition-all duration-300 first:rounded-l-full last:rounded-r-full hover:opacity-90`}
-                        title={`${ele.symbol}: ${widthPct}%`}
-                      />
-                    );
-                  })}
-                </div>
+            <p className="font-body text-xs text-muted2 leading-relaxed">
+              When settled, TENDER automatically converts this payment on-chain into @{invoice.recipientHandle}'s active portfolio allocation:
+            </p>
 
-                <div className="flex items-center justify-between text-[11px] font-mono text-muted2">
-                  <span>Atomic DEX Slicing</span>
-                  <span>100% Fully Allocated</span>
-                </div>
-              </div>
-            )}
-
-            {/* Individual Legs Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-              {elections.map((ele, idx) => {
-                const colorClass = SEGMENT_COLORS[idx % SEGMENT_COLORS.length];
+            {/* Legs List */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {elections.map((ele) => {
                 const matchingLeg = quote.data?.portfolioResult?.legs?.find(
                   (l) => l.assetSymbol === ele.symbol
                 );
@@ -316,10 +280,10 @@ function InvoiceCheckoutPage() {
                 return (
                   <div
                     key={ele.symbol}
-                    className="p-3.5 rounded-2xl bg-base/80 border border-hairline flex items-center justify-between hover:border-hairline/80 transition-colors"
+                    className="p-3.5 rounded-xl bg-base/70 border border-hairline flex items-center justify-between"
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className={`w-2.5 h-2.5 rounded-full ${colorClass}`} />
+                      <span className="w-2 h-2 rounded-full bg-red shrink-0" />
                       <div>
                         <span className="font-mono text-xs font-bold text-foreground block">
                           {ele.symbol}
@@ -331,7 +295,7 @@ function InvoiceCheckoutPage() {
                         )}
                       </div>
                     </div>
-                    <span className="font-mono text-xs font-extrabold text-foreground tabular-nums">
+                    <span className="font-mono text-xs font-semibold text-foreground tabular-nums">
                       {Math.round(ele.basisPoints / 100)}%
                     </span>
                   </div>
@@ -341,42 +305,43 @@ function InvoiceCheckoutPage() {
           </div>
         </div>
 
-        {/* Right Column: Apple-Style Checkout Terminal */}
+        {/* Right Column: Checkout Terminal */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          <div className="glass rounded-3xl p-6 sm:p-8 space-y-6 border border-hairline/90 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-hairline/80 pb-4">
-              <span className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-secondary2">
-                CHECKOUT TERMINAL
+          <div className="glass glass-interactive rounded-2xl p-6 md:p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-hairline/60 pb-3">
+              <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+                <span className="w-1.5 h-1.5 bg-red shrink-0" aria-hidden />
+                CHECKOUT
               </span>
               <ConnectWalletButton />
             </div>
 
             {/* Paid Receipt State */}
             {isPaid ? (
-              <div className="py-8 text-center space-y-5">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-500 shadow-lg shadow-emerald-500/10">
-                  <CheckCircle2 className="w-10 h-10" />
+              <div className="py-6 text-center space-y-5">
+                <div className="w-14 h-14 rounded-full bg-success/10 border border-success/30 flex items-center justify-center mx-auto text-success">
+                  <CheckCircle2 className="w-8 h-8" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <h3 className="font-display text-2xl font-bold text-foreground">
+                <div className="space-y-1">
+                  <h3 className="font-display text-xl font-bold text-foreground">
                     Settled on Solana
                   </h3>
                   <p className="font-body text-xs text-muted2 max-w-xs mx-auto">
-                    Payment executed and atomically routed into @{invoice.recipientHandle}'s portfolio.
+                    Payment executed and atomically delivered into @{invoice.recipientHandle}'s portfolio.
                   </p>
                 </div>
 
                 {activeSignature && (
-                  <div className="p-4 rounded-2xl glass-soft border border-hairline/80 space-y-2 text-left">
+                  <div className="p-4 rounded-xl glass-soft border border-hairline/80 space-y-2 text-left">
                     <div className="flex items-center justify-between font-mono text-xs">
-                      <span className="text-muted2">Transaction Signature</span>
+                      <span className="text-muted2">Tx Signature</span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(activeSignature)}
+                        onClick={() => copySignature(activeSignature)}
                         className="inline-flex items-center gap-1 text-red hover:underline font-semibold cursor-pointer"
                       >
-                        {copiedTx ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        {copiedTx ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
                         <span>{truncate(activeSignature, 12)}</span>
                       </button>
                     </div>
@@ -385,7 +350,7 @@ function InvoiceCheckoutPage() {
                       href={`https://solscan.io/tx/${activeSignature}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full mt-2 py-2.5 px-3 rounded-xl bg-base border border-hairline font-mono text-xs font-semibold text-foreground hover:text-red transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full mt-2 py-2 px-3 rounded-lg bg-base border border-hairline font-mono text-xs font-semibold text-foreground hover:text-red transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <span>View on Solscan</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -395,24 +360,24 @@ function InvoiceCheckoutPage() {
 
                 <Link
                   to="/dashboard/invoices"
-                  className="w-full py-3.5 rounded-2xl bg-foreground text-background font-body font-semibold text-xs uppercase tracking-[0.1em] hover:bg-foreground/90 transition-all block text-center cursor-pointer shadow-md"
+                  className="w-full py-3.5 rounded-xl bg-foreground text-background font-body font-semibold text-xs uppercase tracking-[0.1em] hover:bg-foreground/90 transition-all block text-center cursor-pointer"
                 >
                   Return to Invoices
                 </Link>
               </div>
             ) : isExpired ? (
               /* Expired State */
-              <div className="py-8 text-center space-y-4">
-                <Clock className="w-12 h-12 text-muted2 mx-auto" />
-                <h3 className="font-display text-xl font-bold text-foreground">
+              <div className="py-6 text-center space-y-4">
+                <Clock className="w-10 h-10 text-muted2 mx-auto" />
+                <h3 className="font-display text-lg font-bold text-foreground">
                   Invoice Has Expired
                 </h3>
                 <p className="font-body text-xs text-muted2 leading-relaxed max-w-xs mx-auto">
-                  This payment link has passed its expiration timestamp. Please request a fresh invoice from @{invoice.recipientHandle}.
+                  This payment link has passed its expiration window. Please request a fresh invoice from @{invoice.recipientHandle}.
                 </p>
                 <Link
-                  to="/dashboard"
-                  className="inline-block w-full py-3.5 rounded-2xl bg-base border border-hairline font-body font-semibold text-xs uppercase tracking-[0.1em] text-foreground hover:bg-hairline transition-all cursor-pointer"
+                  to="/dashboard/invoices"
+                  className="inline-block w-full py-3 rounded-xl bg-base border border-hairline font-body font-semibold text-xs uppercase tracking-[0.1em] text-foreground hover:bg-hairline transition-all cursor-pointer"
                 >
                   Return to Dashboard
                 </Link>
@@ -436,10 +401,10 @@ function InvoiceCheckoutPage() {
                   </div>
                   <div className="flex items-center justify-between text-muted2">
                     <span>Payer Fee</span>
-                    <span className="text-emerald-500 font-semibold">0.00% (Zero Surcharge)</span>
+                    <span className="text-success font-semibold">0.00% (Zero Surcharge)</span>
                   </div>
-                  <div className="flex items-center justify-between pt-3 border-t border-hairline font-bold text-base text-foreground">
-                    <span>Total To Pay</span>
+                  <div className="flex items-center justify-between pt-3 border-t border-hairline font-bold text-sm text-foreground">
+                    <span>Total Due</span>
                     <span className="text-red">
                       {invoice.amount} {payToken}
                     </span>
@@ -451,9 +416,9 @@ function InvoiceCheckoutPage() {
                   type="button"
                   disabled={wallet ? !canPay : false}
                   onClick={handlePay}
-                  className={`w-full py-4.5 rounded-2xl font-body font-bold text-sm uppercase tracking-[0.08em] transition-all flex items-center justify-center gap-2.5 ${
+                  className={`w-full py-4 rounded-xl font-body font-semibold text-sm uppercase tracking-[0.08em] transition-all flex items-center justify-center gap-2 ${
                     !wallet || canPay
-                      ? "bg-red hover:bg-red-hover active:scale-[0.99] text-white shadow-xl shadow-red/25 cursor-pointer"
+                      ? "bg-red hover:bg-red-hover active:scale-[0.99] text-white shadow-md cursor-pointer"
                       : "bg-hairline text-muted2 cursor-not-allowed"
                   }`}
                 >
@@ -478,7 +443,7 @@ function InvoiceCheckoutPage() {
                 </button>
 
                 {quote.isError && (
-                  <div className="p-3.5 rounded-2xl bg-red/10 border border-red/30">
+                  <div className="p-3 rounded-xl bg-red/10 border border-red/30">
                     <p className="font-mono text-xs text-red">
                       Route Quote Error: {quote.error.message}
                     </p>
@@ -486,7 +451,7 @@ function InvoiceCheckoutPage() {
                 )}
 
                 {settle.isError && (
-                  <div className="p-3.5 rounded-2xl bg-red/10 border border-red/30">
+                  <div className="p-3 rounded-xl bg-red/10 border border-red/30">
                     <p className="font-mono text-xs text-red">
                       {settle.error.message || "Failed to settle transaction"}
                     </p>
