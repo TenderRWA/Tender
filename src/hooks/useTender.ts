@@ -12,6 +12,7 @@ import {
   getHandle,
   getHandlesByOwner,
   getSettlementHistory,
+  getXAccount,
   registerHandle,
   updateElections,
 } from "@/lib/tender-server-fns";
@@ -25,6 +26,7 @@ import type {
   PortfolioQuoteLeg,
   SettlementHistoryResponse,
   SolanaTokenInfo,
+  XAccountResponse,
 } from "@/types/tender";
 
 /**
@@ -280,3 +282,16 @@ export function useCreateInvoice() {
     }) => createInvoice({ data: input }),
   });
 }
+
+// -- X (Twitter) Account Binding --------------------------------------------
+
+export function useXAccount(wallet?: string | null) {
+  const cleanWallet = (wallet ?? "").trim();
+  return useQuery<XAccountResponse>({
+    queryKey: ["tender", "x-account", cleanWallet],
+    queryFn: () => getXAccount({ data: { wallet: cleanWallet } }),
+    enabled: Boolean(cleanWallet && cleanWallet.length >= 32),
+    staleTime: 30 * 1000,
+  });
+}
+
