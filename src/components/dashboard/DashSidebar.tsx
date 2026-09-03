@@ -14,6 +14,7 @@ export const DASH_MODULES: {
 }[] = [
   { label: "Overview", to: "/dashboard", end: true },
   { label: "Payments", to: "/dashboard/payments", end: false },
+  { label: "Pending", to: "/dashboard/pending", end: false },
   { label: "Elections", to: "/dashboard/elections", end: false },
   { label: "Invoices", to: "/dashboard/invoices", end: false },
   { label: "Universe", to: "/dashboard/universe", end: false },
