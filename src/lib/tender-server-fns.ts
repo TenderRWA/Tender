@@ -30,6 +30,7 @@ import type {
   SolanaTokenInfo,
   UpdateElectionsResponse,
   XAccountResponse,
+  PendingSettlementsResponse,
 } from "@/types/tender";
 
 import { TenderApiError, tenderFetch } from "@/server/tender-api";
@@ -375,5 +376,50 @@ export const getXAccount = createServerFn({ method: "GET" })
       tenderFetch<XAccountResponse>("/api/v1/auth/x/account", {
         query: { wallet: data.wallet },
       }),
+    ),
+  );
+
+// ── Bot Pending Settlements ─────────────────────────────────────────────────
+
+export const getPendingSettlements = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      handle: z.string().trim().optional(),
+      status: z.string().trim().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }),
+  )
+  .handler(({ data }): Promise<PendingSettlementsResponse> =>
+    proxy(() =>
+      tenderFetch<PendingSettlementsResponse>("/api/v1/bot/pending", {
+        query: {
+          handle: data.handle,
+          status: data.status,
+          limit: data.limit ? String(data.limit) : undefined,
+        },
+      }),
+    ),
+  );
+
+export const confirmPendingSettlement = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      id: z.string().trim().min(1),
+      signature: z.string().trim().min(32),
+      payerWallet: z.string().trim().optional(),
+    }),
+  )
+  .handler(({ data }): Promise<{ success: boolean; settlement: any }> =>
+    proxy(() =>
+      tenderFetch<{ success: boolean; settlement: any }>(
+        `/api/v1/bot/pending/${encodeURIComponent(data.id)}/confirm`,
+        {
+          method: "POST",
+          body: {
+            signature: data.signature,
+            payerWallet: data.payerWallet,
+          },
+        },
+      ),
     ),
   );
