@@ -284,6 +284,7 @@ export function useCreateInvoice() {
       recipientHandle: string;
       amount: number | string;
       tokenMint?: string;
+      tokenSymbol?: string;
       memo?: string;
       expiryMinutes?: number;
       creatorWallet?: string;
