@@ -21,6 +21,7 @@ import { Route as DashboardClaimRouteImport } from './routes/dashboard.claim'
 import { Route as DashboardElectionsRouteImport } from './routes/dashboard.elections'
 import { Route as DashboardInvoicesRouteImport } from './routes/dashboard.invoices'
 import { Route as DashboardPaymentsRouteImport } from './routes/dashboard.payments'
+import { Route as DashboardPendingRouteImport } from './routes/dashboard.pending'
 import { Route as DashboardUniverseRouteImport } from './routes/dashboard.universe'
 import { Route as PayInvoiceIdRouteImport } from './routes/pay.$invoiceId'
 
@@ -84,6 +85,11 @@ const DashboardPaymentsRoute = DashboardPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardPendingRoute = DashboardPendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardUniverseRoute = DashboardUniverseRouteImport.update({
   id: '/universe',
   path: '/universe',
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
+  '/dashboard/pending': typeof DashboardPendingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
+  '/dashboard/pending': typeof DashboardPendingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/dashboard/elections': typeof DashboardElectionsRoute
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
+  '/dashboard/pending': typeof DashboardPendingRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
   '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
+    | '/dashboard/pending'
     | '/dashboard/universe'
     | '/pay/$invoiceId'
     | '/dashboard/'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
+    | '/dashboard/pending'
     | '/dashboard/universe'
     | '/pay/$invoiceId'
     | '/dashboard'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/dashboard/elections'
     | '/dashboard/invoices'
     | '/dashboard/payments'
+    | '/dashboard/pending'
     | '/dashboard/universe'
     | '/pay/$invoiceId'
     | '/dashboard/'
@@ -290,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPaymentsRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/dashboard/pending': {
+      id: '/dashboard/pending'
+      path: '/pending'
+      fullPath: '/dashboard/pending'
+      preLoaderRoute: typeof DashboardPendingRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/dashboard/universe': {
       id: '/dashboard/universe'
       path: '/universe'
@@ -312,6 +331,7 @@ interface DashboardRouteChildren {
   DashboardElectionsRoute: typeof DashboardElectionsRoute
   DashboardInvoicesRoute: typeof DashboardInvoicesRoute
   DashboardPaymentsRoute: typeof DashboardPaymentsRoute
+  DashboardPendingRoute: typeof DashboardPendingRoute
   DashboardUniverseRoute: typeof DashboardUniverseRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
@@ -321,6 +341,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardElectionsRoute: DashboardElectionsRoute,
   DashboardInvoicesRoute: DashboardInvoicesRoute,
   DashboardPaymentsRoute: DashboardPaymentsRoute,
+  DashboardPendingRoute: DashboardPendingRoute,
   DashboardUniverseRoute: DashboardUniverseRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
