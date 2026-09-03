@@ -21,6 +21,8 @@ import type {
   ElectionQuoteResponse,
   HandleAvailability,
   HandleDetailsResponse,
+  InvoiceDetailsResponse,
+  InvoiceListResponse,
   InvoiceResponse,
   OwnerHandlesResponse,
   RegisterHandleResponse,
@@ -300,6 +302,61 @@ export const createInvoice = createServerFn({ method: "POST" })
   )
   .handler(({ data }): Promise<InvoiceResponse> =>
     proxy(() => tenderFetch<InvoiceResponse>("/api/v1/invoices", { method: "POST", body: data })),
+  );
+
+export const getInvoice = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      id: z.string().trim().min(1),
+    }),
+  )
+  .handler(({ data }): Promise<InvoiceDetailsResponse> =>
+    proxy(() =>
+      tenderFetch<InvoiceDetailsResponse>(`/api/v1/invoices/${encodeURIComponent(data.id)}`),
+    ),
+  );
+
+export const getInvoices = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      handle: z.string().trim().optional(),
+      wallet: z.string().trim().optional(),
+      status: z.string().trim().optional(),
+    }),
+  )
+  .handler(({ data }): Promise<InvoiceListResponse> =>
+    proxy(() =>
+      tenderFetch<InvoiceListResponse>("/api/v1/invoices", {
+        query: {
+          handle: data.handle || undefined,
+          wallet: data.wallet || undefined,
+          status: data.status || undefined,
+        },
+      }),
+    ),
+  );
+
+export const confirmInvoicePayment = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      id: z.string().trim().min(1),
+      signature: z.string().trim().min(32),
+      payerWallet: z.string().trim().optional(),
+    }),
+  )
+  .handler(({ data }): Promise<{ message: string; invoice: InvoiceResponse }> =>
+    proxy(() =>
+      tenderFetch<{ message: string; invoice: InvoiceResponse }>(
+        `/api/v1/invoices/${encodeURIComponent(data.id)}/confirm`,
+        {
+          method: "POST",
+          body: {
+            signature: data.signature,
+            payerWallet: data.payerWallet,
+          },
+        },
+      ),
+    ),
   );
 
 // ── X (Twitter) Account ───────────────────────────────────────────────────
