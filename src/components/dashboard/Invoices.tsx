@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import ModulePage from "@/components/dashboard/ModulePage";
 import DashTable, {
   DashRow,
@@ -10,7 +11,7 @@ import { useAssets, useCreateInvoice, useInvoices } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
 import type { InvoiceRecord } from "@/types/tender";
-import { ExternalLink, Copy, Check } from "lucide-react";
+import { ExternalLink, Copy, Check, X, CheckCircle2, AlertCircle } from "lucide-react";
 
 const inputCls =
   "w-full glass-soft rounded-xl px-4 py-3 font-body text-sm text-foreground placeholder:text-muted2 focus:outline-none focus:border-red focus:ring-2 focus:ring-red/25 transition-all duration-150";
@@ -37,17 +38,27 @@ export default function Invoices() {
   const [days, setDays] = useState("14");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Local state to ensure newly created invoices appear in the table instantly
+  const [localCreated, setLocalCreated] = useState<InvoiceRecord[]>([]);
+
+  // Modals for success and error
+  const [successModalInvoice, setSuccessModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [errorModalMessage, setErrorModalMessage] = useState<string | null>(null);
+
   const effectiveHandle = (recipient || sessionHandle).trim().replace(/^@/, "");
   const parsed = Number(amount);
   const valid = Number.isFinite(parsed) && parsed > 0 && effectiveHandle.length > 0;
 
+  // Merge DB invoices with locally created session invoices so nothing is missing
   const invoices = useMemo<InvoiceRecord[]>(() => {
-    return dbData?.invoices ?? [];
-  }, [dbData]);
+    const fromDb = dbData?.invoices ?? [];
+    const seen = new Set(fromDb.map((i) => i.id));
+    const pendingLocal = localCreated.filter((i) => !seen.has(i.id));
+    return [...pendingLocal, ...fromDb];
+  }, [dbData, localCreated]);
 
   const submit = () => {
     if (!valid || create.isPending) return;
-    const chosenToken = baseCurrencies.find((b) => b.mint === mint);
 
     create.mutate(
       {
@@ -56,12 +67,19 @@ export default function Invoices() {
         tokenMint: mint || undefined,
         memo: memo.trim() || undefined,
         expiryMinutes: Math.max(1, Math.round(Number(days || 14) * 24 * 60)),
+        creatorWallet: wallet || undefined,
+        creatorHandle: sessionHandle || undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (newInvoice) => {
+          setLocalCreated((prev) => [newInvoice, ...prev]);
+          setSuccessModalInvoice(newInvoice);
           setAmount("");
           setMemo("");
           setFormOpen(false);
+        },
+        onError: (err) => {
+          setErrorModalMessage(err.message || "Failed to create invoice");
         },
       },
     );
@@ -92,12 +110,6 @@ export default function Invoices() {
         >
           {formOpen ? "Cancel" : "+ Create Invoice"}
         </button>
-        {create.isSuccess && !formOpen && (
-          <span className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.12em] text-success">
-            <span className="w-1.5 h-1.5 bg-success" aria-hidden />
-            {create.data.id} CREATED
-          </span>
-        )}
       </div>
 
       {formOpen && (
@@ -183,11 +195,6 @@ export default function Invoices() {
           >
             {create.isPending ? "Generating…" : "Generate Pay-Link"}
           </button>
-          {create.isError && (
-            <p className="font-mono text-xs uppercase tracking-[0.12em] text-red">
-              {create.error.message}
-            </p>
-          )}
         </div>
       )}
 
@@ -272,6 +279,202 @@ export default function Invoices() {
           No invoices recorded for this handle yet. Click "+ Create Invoice" to generate a shareable pay-link.
         </p>
       )}
+
+      {/* SUCCESS MODAL */}
+      <AnimatePresence>
+        {successModalInvoice && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+            onClick={() => setSuccessModalInvoice(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg rounded-2xl border border-hairline bg-card2 p-6 md:p-8 shadow-2xl glass space-y-6"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-hairline">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-success/10 border border-success/30 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-success" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-lg font-medium text-foreground">
+                      Invoice Created · On Rails
+                    </h3>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                      Ready to share and settle
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSuccessModalInvoice(null)}
+                  className="rounded-lg p-1.5 text-muted2 hover:text-foreground hover:bg-base transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Invoice Summary Card */}
+              <div className="p-4 rounded-xl bg-base/70 border border-hairline space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-muted2">Invoice ID</span>
+                  <span className="font-mono text-xs font-semibold text-foreground">
+                    {successModalInvoice.id}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-muted2">Recipient</span>
+                  <span className="font-mono text-xs font-semibold text-foreground">
+                    @{successModalInvoice.recipientHandle}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-muted2">Amount</span>
+                  <span className="font-mono text-sm font-bold text-red">
+                    {Number(successModalInvoice.amount).toLocaleString()}{" "}
+                    {successModalInvoice.tokenSymbol || "USDC"}
+                  </span>
+                </div>
+                {successModalInvoice.memo && (
+                  <div className="flex items-center justify-between pt-1 border-t border-hairline/60">
+                    <span className="font-mono text-xs text-muted2">Memo</span>
+                    <span className="font-body text-xs text-foreground truncate max-w-[240px]">
+                      {successModalInvoice.memo}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Shareable Links */}
+              <div className="space-y-3">
+                <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 block">
+                  Shareable Web Checkout Link
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={successModalInvoice.payUrl}
+                    className="w-full rounded-xl border border-hairline bg-base/80 px-3.5 py-2.5 font-mono text-xs text-foreground outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(successModalInvoice.payUrl, "modal-web")}
+                    className="shrink-0 px-4 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white font-mono text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                  >
+                    {copiedKey === "modal-web" ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={successModalInvoice.payUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 p-2.5 rounded-xl border border-hairline hover:border-red text-muted2 hover:text-foreground transition-colors"
+                    title="Open checkout page"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 block">
+                  Solana Pay QR URI
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={successModalInvoice.solanaPayUrl}
+                    className="w-full rounded-xl border border-hairline bg-base/80 px-3.5 py-2.5 font-mono text-xs text-foreground outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(successModalInvoice.solanaPayUrl, "modal-sol")}
+                    className="shrink-0 px-4 py-2.5 rounded-xl glass-soft border border-hairline hover:border-red text-foreground font-mono text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                  >
+                    {copiedKey === "modal-sol" ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-success" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSuccessModalInvoice(null)}
+                className="w-full py-3.5 rounded-xl bg-base hover:bg-raised border border-hairline font-body font-semibold text-xs uppercase tracking-[0.08em] text-foreground transition-colors"
+              >
+                Done
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ERROR MODAL */}
+      <AnimatePresence>
+        {errorModalMessage && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+            onClick={() => setErrorModalMessage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-red/30 bg-card2 p-6 shadow-2xl glass space-y-5"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-hairline">
+                <div className="flex items-center gap-2.5 text-red">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  <h3 className="font-display text-base font-medium text-foreground">
+                    Invoice Creation Failed
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setErrorModalMessage(null)}
+                  className="rounded-lg p-1 text-muted2 hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="font-body text-xs text-muted2 leading-relaxed">
+                {errorModalMessage}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setErrorModalMessage(null)}
+                className="w-full py-3 rounded-xl bg-red hover:bg-red-hover text-white font-body font-semibold text-xs uppercase tracking-[0.08em] transition-colors"
+              >
+                Dismiss
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </ModulePage>
   );
 }
