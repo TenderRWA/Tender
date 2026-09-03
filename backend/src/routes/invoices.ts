@@ -4,6 +4,8 @@ import { config } from "../config";
 import { calculatePortfolioElectionQuotes } from "../services/dualQuoteEngine";
 import { buildSettlementTxPlan } from "../services/txBuilder";
 
+import { resolveSolanaToken, findSolanaToken } from "../lib/rwaTokens";
+
 export const invoicesRouter = Router();
 
 export interface InvoiceRecord {
@@ -57,8 +59,8 @@ invoicesRouter.post("/", async (req: Request, res: Response) => {
     const {
       recipientHandle,
       amount,
-      tokenMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // Default USDC
-      tokenSymbol = "USDC",
+      tokenMint,
+      tokenSymbol,
       memo,
       expiryMinutes = 14 * 24 * 60, // Default 14 days
       creatorWallet,
@@ -72,6 +74,14 @@ invoicesRouter.post("/", async (req: Request, res: Response) => {
 
     const cleanHandle = recipientHandle.toLowerCase().replace(/^@/, "").trim();
     const cleanCreatorHandle = creatorHandle ? String(creatorHandle).toLowerCase().replace(/^@/, "").trim() : null;
+
+    // Resolve token mint and symbol
+    const resolvedToken =
+      (tokenMint ? (resolveSolanaToken(tokenMint) || findSolanaToken(tokenMint)) : null) ||
+      (tokenSymbol ? (resolveSolanaToken(tokenSymbol) || findSolanaToken(tokenSymbol)) : null);
+
+    const finalMint = resolvedToken?.mint || tokenMint || "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    const finalSymbol = resolvedToken?.symbol || tokenSymbol || "USDC";
 
     const handleResult = await query(
       "SELECT handle, owner_wallet FROM handles WHERE handle = $1",
@@ -97,8 +107,8 @@ invoicesRouter.post("/", async (req: Request, res: Response) => {
         cleanHandle,
         recipientWallet,
         Number(amount),
-        tokenMint,
-        tokenSymbol,
+        finalMint,
+        finalSymbol,
         memo || null,
         expiresAt,
         creatorWallet || null,
