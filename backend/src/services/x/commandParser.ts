@@ -18,6 +18,52 @@ export function parseFastCommand(text: string): ParsedBotIntent | null {
     };
   }
 
+  // 1b. Send/Transfer NFT: "send nft <mint> to @tag", "transfer nft <mint> to @tag", "send @tag nft <mint>"
+  const nftRegex1 = /^(?:send|transfer)\s+nft\s+([1-9A-HJ-NP-Za-km-z]{32,44})\s+(?:to\s+)?([@a-zA-Z0-9_-]{3,64})$/i;
+  const matchNft1 = clean.match(nftRegex1);
+  if (matchNft1) {
+    const mint = matchNft1[1];
+    const target = matchNft1[2].startsWith("@") ? matchNft1[2] : `@${matchNft1[2]}`;
+    return {
+      action: "send_nft",
+      target,
+      amount: 1,
+      token: "NFT",
+      memo: mint,
+      confidence: 1.0,
+    };
+  }
+
+  const nftRegex2 = /^(?:send|transfer)\s+([@a-zA-Z0-9_-]{3,64})\s+nft\s+([1-9A-HJ-NP-Za-km-z]{32,44})$/i;
+  const matchNft2 = clean.match(nftRegex2);
+  if (matchNft2) {
+    const target = matchNft2[1].startsWith("@") ? matchNft2[1] : `@${matchNft2[1]}`;
+    const mint = matchNft2[2];
+    return {
+      action: "send_nft",
+      target,
+      amount: 1,
+      token: "NFT",
+      memo: mint,
+      confidence: 1.0,
+    };
+  }
+
+  const nftRegex3 = /^(?:send|transfer)\s+nft\s+(?:to\s+)?([@a-zA-Z0-9_-]{3,64})\s+([1-9A-HJ-NP-Za-km-z]{32,44})$/i;
+  const matchNft3 = clean.match(nftRegex3);
+  if (matchNft3) {
+    const target = matchNft3[1].startsWith("@") ? matchNft3[1] : `@${matchNft3[1]}`;
+    const mint = matchNft3[2];
+    return {
+      action: "send_nft",
+      target,
+      amount: 1,
+      token: "NFT",
+      memo: mint,
+      confidence: 1.0,
+    };
+  }
+
   // 2. Pay/Send/Tip: "pay @whoknows 50 USDC" or "send 50 USDC to @whoknows" or "tip @whoknows 10 SOL"
   const payRegex1 = /^(?:pay|send|tip)\s+([@a-zA-Z0-9_-]{3,64})\s+([0-9.]+)\s*([a-zA-Z0-9]+)?(?:\s+(?:for|memo:?)\s+(.+))?$/i;
   const match1 = clean.match(payRegex1);
