@@ -315,8 +315,9 @@ invoicesRouter.post("/solana-pay/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    // Calculate portfolio multi-leg quotes using the invoice amount in USDC
-    const atomicAmount = Math.round(Number(invoice.amount) * 1_000_000); // USDC 6 decimals
+    // Calculate portfolio multi-leg quotes using the invoice amount in atomic units
+    const decimals = invoice.token_symbol?.toUpperCase() === "SOL" ? 9 : 6;
+    const atomicAmount = Math.round(Number(invoice.amount) * 10 ** decimals);
 
     const portfolioResult = await calculatePortfolioElectionQuotes({
       inputMint: invoice.token_mint,
