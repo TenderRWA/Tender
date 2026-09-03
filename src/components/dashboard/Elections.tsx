@@ -93,18 +93,6 @@ export default function Elections() {
       title="Choose what you hold."
       blurb="Your election defines how incoming payments settle: which assets, in what proportions. The rail executes the swaps atomically at receipt time."
     >
-      {/* Gate notice */}
-      <div className="glass border-l-2 border-l-red rounded-2xl p-5 md:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
-        <span className="w-1.5 h-1.5 bg-red shrink-0 hidden sm:block" aria-hidden />
-        <p className="font-body text-sm text-secondary2 leading-relaxed">
-          <span className="font-mono text-xs uppercase tracking-[0.12em] text-foreground">
-            ELIGIBLE-UNIVERSE GATE{"  "}
-          </span>
-          Only assets in the TENDER eligible universe (see module 06) can be elected. Suspended
-          assets are rejected at save time and existing elections auto-fall back to USDC.
-        </p>
-      </div>
-
       {!handle && (
         <div className="glass rounded-2xl p-5 md:p-6">
           <p className="font-body text-sm text-secondary2">

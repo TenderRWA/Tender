@@ -20,17 +20,17 @@ export default function ConnectWalletButton({ className = "" }: { className?: st
           type="button"
           onClick={() => void disconnect()}
           title={`${walletName} · ${address} — click to disconnect`}
-          className={`inline-flex items-center gap-2 rounded-full border border-hairline/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary2 transition-colors duration-150 hover:border-red hover:text-foreground ${className}`}
+          className={`inline-flex h-9 items-center gap-2 rounded-full border border-hairline px-3.5 font-mono text-[12px] tracking-[0.1em] text-ink/75 uppercase transition-colors duration-150 hover:border-red hover:text-ink ${className}`}
         >
           {walletIcon && <img src={walletIcon} alt="" className="h-4 w-4 rounded" aria-hidden />}
           {truncate(address)}
-          <span className="text-muted2">· DISCONNECT</span>
+          <span className="text-muted2">· Disconnect</span>
         </button>
       ) : (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className={`inline-flex items-center gap-2 rounded-full border border-hairline/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary2 transition-colors duration-150 hover:border-red hover:text-foreground ${className}`}
+          className={`inline-flex h-9 items-center gap-2 rounded-full border border-hairline px-3.5 font-mono text-[12px] tracking-[0.1em] text-ink/75 uppercase transition-colors duration-150 hover:border-red hover:text-ink ${className}`}
         >
           <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />
           CONNECT WALLET

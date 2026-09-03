@@ -51,7 +51,11 @@ export default function TerminalControls() {
   const tooShort = handle.length > 0 && handle.length < 3;
 
   const status: { tone: Tone; label: string; hint: string } = !handle
-    ? { tone: "warning", label: "NO HANDLE", hint: "Claim or select a handle to activate this terminal." }
+    ? {
+        tone: "warning",
+        label: "NO HANDLE",
+        hint: "Claim or select a handle to activate this terminal.",
+      }
     : tooShort
       ? { tone: "muted", label: `@${handle}`, hint: "Resolving handle…" }
       : isFetching
@@ -104,29 +108,34 @@ export default function TerminalControls() {
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           title={status.hint}
-          className="inline-flex items-center gap-2 rounded-full border border-hairline/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-secondary2 transition-colors duration-150 hover:border-red hover:text-foreground"
+          className="inline-flex h-9 items-center gap-2 rounded-full border border-hairline px-3.5 font-mono text-[12px] tracking-[0.1em] text-ink/75 uppercase transition-colors duration-150 hover:border-red hover:text-ink"
         >
           <span className={`h-1.5 w-1.5 rounded-full ${DOT[status.tone]}`} aria-hidden />
           <span className="max-w-[14ch] truncate">{status.label}</span>
-          <ChevronDown className="h-3 w-3 text-muted2" />
+          <ChevronDown className="h-3.5 w-3.5 text-muted2" />
         </button>
 
         {open && (
           <div
             data-lenis-prevent="true"
-            className="glass absolute right-0 top-full z-20 mt-2 w-80 rounded-xl p-4 shadow-2xl border border-hairline"
+            className="menu-surface menu-enter absolute top-full right-0 z-[80] mt-2 w-80 rounded-2xl p-4"
           >
             {/* Wallet Owned Handles Section */}
             {address && ownedHandles.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between pb-1 border-b border-hairline">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+                  <span className="font-mono text-[11px] tracking-[0.12em] text-secondary2 uppercase">
                     Your Handles ({ownedHandles.length})
                   </span>
-                  <span className="font-mono text-[9px] text-success font-medium">● CONNECTED</span>
+                  <span className="font-mono text-[11px] font-medium text-success">
+                    ● Connected
+                  </span>
                 </div>
 
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                <div
+                  className="menu-scroll max-h-48 space-y-1.5 overflow-y-auto"
+                  data-lenis-prevent="true"
+                >
                   {ownedHandles.map((h) => {
                     const isActive = handle === h;
                     return (
@@ -145,11 +154,11 @@ export default function TerminalControls() {
                       >
                         <span>@{h}</span>
                         {isActive ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-red font-medium">
-                            <Check className="h-3.5 w-3.5" /> ACTIVE
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red">
+                            <Check className="h-3.5 w-3.5" /> Active
                           </span>
                         ) : (
-                          <span className="text-[10px] text-muted2">Switch</span>
+                          <span className="text-[11px] text-muted2">Switch</span>
                         )}
                       </button>
                     );
@@ -162,7 +171,7 @@ export default function TerminalControls() {
                     setOpen(false);
                     navigate("/dashboard/claim");
                   }}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-hairline py-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted2 hover:border-red hover:text-ink transition-colors"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-hairline py-2.5 font-mono text-[11px] tracking-[0.08em] text-secondary2 uppercase transition-colors hover:border-red hover:text-ink"
                 >
                   <Plus className="h-3 w-3 text-red" />
                   Claim New Handle
@@ -199,7 +208,7 @@ export default function TerminalControls() {
                 <button
                   type="button"
                   onClick={() => setShowManualInput(true)}
-                  className="w-full text-left font-mono text-[10px] uppercase tracking-[0.1em] text-muted2 hover:text-ink transition-colors"
+                  className="w-full text-left font-mono text-[11px] tracking-[0.1em] text-muted2 uppercase transition-colors hover:text-ink"
                 >
                   + Enter custom handle manually
                 </button>
@@ -237,7 +246,7 @@ export default function TerminalControls() {
             {/* Active Handle Status Pill */}
             {handle && (
               <div className="mt-2.5 pt-2 border-t border-hairline/40">
-                <p className={`font-body text-[10px] leading-snug ${TEXT[status.tone]}`}>
+                <p className={`font-body text-[12px] leading-snug ${TEXT[status.tone]}`}>
                   {status.hint}
                 </p>
               </div>
