@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-import SectionMarker from "@/components/SectionMarker";
+import { useNavigate } from "@/lib/router-compat";
 import CtaStrip from "@/components/pricing/CtaStrip";
+import {
+  Callout,
+  DefList,
+  DOC_ACTION_PRIMARY,
+  DocHero,
+  DocSection,
+  MonoBlock,
+  Para,
+  PrintButton,
+  Reveal,
+} from "@/components/docs/DocKit";
 import { scrollToHash } from "@/lib/lenis";
-
-const EXPO = [0.16, 1, 0.3, 1] as [number, number, number, number];
-
-const DOC = {
-  version: "V1.0",
-  updated: "SEPTEMBER 2026",
-  network: "SOLANA · MAINNET-BETA",
-};
 
 const SECTIONS = [
   { id: "abstract", num: "01", title: "Abstract" },
@@ -21,229 +23,20 @@ const SECTIONS = [
   { id: "risk", num: "06", title: "Risk controls" },
   { id: "economics", num: "07", title: "Fee model" },
   { id: "interfaces", num: "08", title: "Interfaces" },
-  { id: "roadmap", num: "09", title: "Roadmap" },
-  { id: "limits", num: "10", title: "Scope & limits" },
+  { id: "limits", num: "09", title: "Scope & limits" },
 ];
 
 const SECTION_IDS = SECTIONS.map((s) => s.id);
 
-/* ------------------------------------------------------------------ */
-/* Primitives                                                          */
-/* ------------------------------------------------------------------ */
-
-/** Fade-up wrapper. This page is Framer-only - no GSAP in the subtree. */
-function Reveal({
-  children,
-  className,
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const reduced = useReducedMotion();
-  return (
-    <motion.div
-      data-wp-reveal
-      initial={reduced ? false : { y: 24, opacity: 0 }}
-      whileInView={{ y: 0, opacity: 1 }}
-      viewport={{ once: true, margin: "-6% 0px" }}
-      transition={{ duration: 0.65, ease: EXPO, delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function SectionHead({ num, title, lede }: { num: string; title: string; lede?: string }) {
-  return (
-    <Reveal>
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-xs uppercase tracking-[0.12em] text-red">{num}</span>
-        <span className="flex-1 h-px bg-hairline" aria-hidden />
-      </div>
-      <h2 className="mt-5 font-display font-semibold text-[30px] md:text-[42px] leading-[1.05] tracking-[-0.03em] text-ink">
-        {title}
-      </h2>
-      {lede && <p className="mt-4 font-body text-[17px] leading-[1.65] text-secondary2">{lede}</p>}
-    </Reveal>
-  );
-}
-
-function DocSection({
-  id,
-  num,
-  title,
-  lede,
-  children,
-}: {
-  id: string;
-  num: string;
-  title: string;
-  lede?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-28">
-      <SectionHead num={num} title={title} lede={lede} />
-      <div className="mt-8 flex flex-col gap-6">{children}</div>
-    </section>
-  );
-}
-
-function Para({ children }: { children: React.ReactNode }) {
-  return (
-    <Reveal>
-      <p className="font-body text-[17px] leading-[1.75] text-secondary2">{children}</p>
-    </Reveal>
-  );
-}
-
-/** Keyed definition rows - the document's workhorse list. */
-function DefList({ items }: { items: { term: string; body: string }[] }) {
-  return (
-    <Reveal>
-      <dl className="flex flex-col">
-        {items.map((it) => (
-          <div
-            key={it.term}
-            className="grid grid-cols-1 gap-1.5 border-t border-hairline py-5 last:border-b sm:grid-cols-12 sm:gap-6"
-          >
-            <dt className="font-mono text-xs uppercase tracking-[0.12em] text-ink sm:col-span-4">
-              {it.term}
-            </dt>
-            <dd className="font-body text-[15px] leading-relaxed text-secondary2 sm:col-span-8">
-              {it.body}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </Reveal>
-  );
-}
-
-/** Bordered mono block for flow diagrams and endpoint lists. */
-function MonoBlock({ children, caption }: { children: string; caption?: string }) {
-  return (
-    <Reveal>
-      <figure className="bg-card2 border border-hairline rounded">
-        <div className="overflow-x-auto p-5 md:p-7">
-          <pre className="font-mono text-[11px] md:text-[13px] leading-[1.7] text-ink whitespace-pre">
-            {children}
-          </pre>
-        </div>
-        {caption && (
-          <figcaption className="border-t border-hairline px-5 md:px-7 py-4 font-mono text-xs uppercase tracking-[0.12em] text-muted2">
-            {caption}
-          </figcaption>
-        )}
-      </figure>
-    </Reveal>
-  );
-}
-
-function Callout({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <Reveal>
-      <div className="border-l-2 border-red bg-card2 rounded-r px-5 py-5 md:px-7 md:py-6">
-        <span className="block font-mono text-xs uppercase tracking-[0.12em] text-red">
-          {label}
-        </span>
-        <p className="mt-3 font-body text-[17px] leading-[1.7] text-ink">{children}</p>
-      </div>
-    </Reveal>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* P1. Hero                                                            */
-/* ------------------------------------------------------------------ */
-
-const META_ROWS: [string, string][] = [
-  ["VERSION", DOC.version],
-  ["UPDATED", DOC.updated],
-  ["NETWORK", DOC.network],
+const HERO_META: [string, string][] = [
+  ["VERSION", "V1.0"],
+  ["UPDATED", "SEPTEMBER 2026"],
+  ["NETWORK", "SOLANA · MAINNET-BETA"],
   ["STATUS", "LIVE"],
 ];
 
-function WhitepaperHero() {
-  const reduced = useReducedMotion();
-
-  return (
-    <section className="relative border-b border-hairline bg-base/55">
-      <div className="mx-auto max-w-container px-5 md:px-10 pt-14 md:pt-20 pb-16 md:pb-24">
-        <SectionMarker index="011" label="WHITEPAPER & ROADMAP" />
-
-        <motion.h1
-          initial={reduced ? false : { y: 32, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.8, ease: EXPO, delay: 0.1 }}
-          className="font-display font-semibold text-[40px] md:text-[68px] lg:text-[88px] leading-[0.95] tracking-[-0.04em] text-ink max-w-5xl"
-        >
-          The rail, written down.
-          <span className="block text-red">And what ships next.</span>
-        </motion.h1>
-
-        <motion.p
-          initial={reduced ? false : { y: 24, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.7, ease: EXPO, delay: 0.25 }}
-          className="mt-8 max-w-2xl font-body text-[17px] leading-[1.65] text-secondary2"
-        >
-          How TENDER settles a payment into the receiver's elected assets - the laws, the
-          architecture, the fee model, and the phases still ahead of us. One document, kept current
-          with what is actually deployed.
-        </motion.p>
-
-        <motion.div
-          initial={reduced ? false : { y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.7, ease: EXPO, delay: 0.35 }}
-          className="mt-10 flex flex-col gap-8"
-        >
-          <dl className="flex flex-wrap gap-x-10 gap-y-5">
-            {META_ROWS.map(([k, v]) => (
-              <div key={k} className="flex flex-col gap-1.5">
-                <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted2">
-                  {k}
-                </dt>
-                <dd
-                  className={`font-mono text-[13px] uppercase tracking-[0.08em] ${
-                    v === "LIVE" ? "text-success" : "text-ink"
-                  }`}
-                >
-                  {v}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
-          <div data-print-hide className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => scrollToHash("#roadmap")}
-              className="group bg-red hover:bg-red-hover text-white font-body font-semibold text-sm uppercase tracking-[0.08em] rounded px-7 py-3.5 transition-all duration-150 hover:-translate-y-0.5 inline-flex items-center gap-2"
-            >
-              Jump to roadmap
-              <span className="inline-block transition-transform duration-150 group-hover:translate-y-0.5">
-                ↓
-              </span>
-            </button>
-            <button
-              onClick={() => window.print()}
-              className="border border-hairline text-secondary2 hover:text-ink hover:border-red font-body font-semibold text-sm uppercase tracking-[0.08em] rounded px-7 py-3.5 transition-colors duration-150"
-            >
-              Print / save as PDF
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
 /* ------------------------------------------------------------------ */
-/* P2. Contents (sticky rail + mobile disclosure)                      */
+/* Contents rail                                                       */
 /* ------------------------------------------------------------------ */
 
 function useActiveSection() {
@@ -309,143 +102,7 @@ function TocList({ active, onPick }: { active: string; onPick: (id: string) => v
 }
 
 /* ------------------------------------------------------------------ */
-/* P3. Roadmap                                                         */
-/* ------------------------------------------------------------------ */
-
-type PhaseStatus = "shipped" | "building" | "planned" | "research";
-
-const STATUS_META: Record<PhaseStatus, { label: string; dot: string; text: string; edge: string }> =
-  {
-    shipped: { label: "SHIPPED", dot: "bg-success", text: "text-success", edge: "bg-success" },
-    building: { label: "IN BUILD", dot: "bg-red", text: "text-red", edge: "bg-red" },
-    planned: { label: "PLANNED", dot: "bg-greyseries", text: "text-muted2", edge: "bg-greyseries" },
-    research: { label: "RESEARCH", dot: "bg-greyseries", text: "text-muted2", edge: "bg-hairline" },
-  };
-
-const PHASES: {
-  code: string;
-  when: string;
-  name: string;
-  status: PhaseStatus;
-  items: string[];
-}[] = [
-  {
-    code: "T1",
-    when: "NOW",
-    name: "Elections & atomic settlement",
-    status: "shipped",
-    items: [
-      "On-chain handle registry, consumed not forked",
-      "Elections expressed in basis points, summing to 100%",
-      "Single-recipient pay-by-handle, settled at receipt",
-      "Jupiter best-route execution with slippage caps",
-      "USDC safe-settle fallback on a breaching leg",
-    ],
-  },
-  {
-    code: "T2",
-    when: "NEXT",
-    name: "Splits & invoices",
-    status: "building",
-    items: [
-      "Multi-recipient handles, each share on its own election",
-      "Solana Pay QR and pay-links carrying amount, memo, expiry",
-      "Invoice status and settlement receipts in the terminal",
-      "Dual-provider quoting: Jupiter V6 and Relay.link V2",
-    ],
-  },
-  {
-    code: "T3",
-    when: "LATER",
-    name: "Payroll vaults & token genesis",
-    status: "planned",
-    items: [
-      "Funder vault with roster and schedule",
-      "Permissionless crank: anyone can trigger a due run",
-      "Per-recipient elections honoured on every run",
-      "$TNDR genesis, staker fee share and buyback flow",
-    ],
-  },
-  {
-    code: "T4",
-    when: "LATER",
-    name: "Resolution & cross-chain pay-in",
-    status: "research",
-    items: [
-      ".sol domain resolution adapter",
-      "Cross-chain pay-in routes into the same election",
-      "Wider eligible-asset universe under staker governance",
-    ],
-  },
-];
-
-function Roadmap() {
-  return (
-    <section id="roadmap" className="scroll-mt-28">
-      <SectionHead
-        num="09"
-        title="Roadmap"
-        lede="Four phases. Each ships a primitive that stands on its own - nothing here needs a later phase to be useful."
-      />
-
-      <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {PHASES.map((p, i) => {
-          const meta = STATUS_META[p.status];
-          return (
-            <Reveal key={p.code} delay={i * 0.06} className="h-full">
-              <article className="group relative flex h-full flex-col gap-5 overflow-hidden rounded border border-hairline bg-card2 p-6 transition-colors duration-300 hover:border-red md:p-7">
-                <span className={`absolute inset-x-0 top-0 h-0.5 ${meta.edge}`} aria-hidden />
-
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-mono text-sm uppercase tracking-[0.12em] text-muted2">
-                    PHASE {p.code}
-                  </span>
-                  <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted2">
-                    {p.when}
-                  </span>
-                </div>
-
-                <div>
-                  <span
-                    className={`inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] ${meta.text}`}
-                  >
-                    <span className={`h-1.5 w-1.5 shrink-0 ${meta.dot}`} aria-hidden />
-                    {meta.label}
-                  </span>
-                  <h3 className="mt-3 font-display font-medium text-[24px] leading-[1.12] tracking-[-0.02em] text-ink">
-                    {p.name}
-                  </h3>
-                </div>
-
-                <ul className="flex flex-col gap-2.5">
-                  {p.items.map((it) => (
-                    <li
-                      key={it}
-                      className="flex items-start gap-3 font-body text-[15px] leading-relaxed text-secondary2"
-                    >
-                      <span className="mt-[8px] h-1.5 w-1.5 shrink-0 bg-red" aria-hidden />
-                      {it}
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            </Reveal>
-          );
-        })}
-      </div>
-
-      <Reveal>
-        <p className="mt-8 font-mono text-xs uppercase leading-relaxed tracking-[0.12em] text-muted2">
-          Phase order is a commitment; phase dates are not. Anything past T2 may move as the
-          eligible-asset universe and staker governance mature.
-        </p>
-      </Reveal>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* P4. Fee table                                                       */
+/* Fee table                                                           */
 /* ------------------------------------------------------------------ */
 
 const FEE_ROWS: { path: string; basis: string; rate: string; free: boolean }[] = [
@@ -507,10 +164,26 @@ function FeeTable() {
 
 export default function Whitepaper() {
   const active = useActiveSection();
+  const navigate = useNavigate();
 
   return (
     <>
-      <WhitepaperHero />
+      <DocHero
+        index="011"
+        label="WHITEPAPER"
+        line1="The rail,"
+        line2="written down."
+        sub="How TENDER settles a payment into the receiver's elected assets - the laws it obeys, the architecture behind them, the fee model, and what the rail refuses to do. Kept current with what is actually deployed."
+        meta={HERO_META}
+      >
+        <button onClick={() => navigate("/roadmap")} className={DOC_ACTION_PRIMARY}>
+          Read the roadmap
+          <span className="inline-block transition-transform duration-150 group-hover:translate-x-1.5">
+            →
+          </span>
+        </button>
+        <PrintButton />
+      </DocHero>
 
       <div className="mx-auto max-w-container px-5 md:px-10 py-14 md:py-20">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-14">
@@ -789,11 +462,9 @@ export default function Whitepaper() {
               </Para>
             </DocSection>
 
-            <Roadmap />
-
             <DocSection
               id="limits"
-              num="10"
+              num="09"
               title="Scope & limitations"
               lede="What this document is not claiming."
             >
@@ -808,8 +479,8 @@ export default function Whitepaper() {
                     body: "An election expresses exposure to tokenised assets. Issuer, market and liquidity risk sit with the holder, and conversion depends on available on-chain liquidity at the moment of receipt.",
                   },
                   {
-                    term: "FORWARD-LOOKING SECTIONS",
-                    body: "Phase T2 and later describe intent, not deployed code. The order is a commitment; timing and detail may change.",
+                    term: "DEPLOYED VS. INTENDED",
+                    body: "This document describes the rail as built. Anything still ahead of us lives on the roadmap, marked by phase - and the order there is a commitment while the timing is not.",
                   },
                   {
                     term: "NOT AN OFFER",
@@ -817,6 +488,32 @@ export default function Whitepaper() {
                   },
                 ]}
               />
+
+              <Reveal>
+                <button
+                  onClick={() => navigate("/roadmap")}
+                  data-print-hide
+                  className="group flex w-full items-center justify-between gap-6 rounded border border-hairline bg-card2 px-6 py-6 text-left transition-colors duration-300 hover:border-red md:px-8"
+                >
+                  <span className="flex flex-col gap-2">
+                    <span className="font-mono text-xs uppercase tracking-[0.12em] text-muted2">
+                      NEXT DOCUMENT
+                    </span>
+                    <span className="font-display text-[24px] font-medium leading-[1.12] tracking-[-0.02em] text-ink md:text-[28px]">
+                      The roadmap
+                    </span>
+                    <span className="font-body text-[15px] leading-relaxed text-secondary2">
+                      Four phases, what ships in each, and how the order can change.
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden
+                    className="shrink-0 font-display text-3xl text-red transition-transform duration-200 group-hover:translate-x-1.5"
+                  >
+                    →
+                  </span>
+                </button>
+              </Reveal>
             </DocSection>
           </article>
         </div>

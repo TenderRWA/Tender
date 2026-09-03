@@ -13,6 +13,7 @@ const NAV_LINKS: { label: string; to: string; newTab?: boolean }[] = [
   { label: "Services", to: "/services" },
   { label: "Pricing", to: "/pricing" },
   { label: "Whitepaper", to: "/whitepaper", newTab: true },
+  { label: "Roadmap", to: "/roadmap", newTab: true },
   { label: "Dashboard", to: "/dashboard" },
   { label: "Contact", to: "/contact" },
 ];

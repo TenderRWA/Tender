@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as TeamRouteImport } from './routes/team'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
@@ -44,6 +45,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoadmapRoute = RoadmapRouteImport.update({
+  id: '/roadmap',
+  path: '/roadmap',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServicesRoute = ServicesRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/pricing': typeof PricingRoute
+  '/roadmap': typeof RoadmapRoute
   '/services': typeof ServicesRoute
   '/team': typeof TeamRoute
   '/whitepaper': typeof WhitepaperRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/contact': typeof ContactRoute
   '/pricing': typeof PricingRoute
+  '/roadmap': typeof RoadmapRoute
   '/services': typeof ServicesRoute
   '/team': typeof TeamRoute
   '/whitepaper': typeof WhitepaperRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/pricing': typeof PricingRoute
+  '/roadmap': typeof RoadmapRoute
   '/services': typeof ServicesRoute
   '/team': typeof TeamRoute
   '/whitepaper': typeof WhitepaperRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/dashboard'
     | '/pricing'
+    | '/roadmap'
     | '/services'
     | '/team'
     | '/whitepaper'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/'
     | '/contact'
     | '/pricing'
+    | '/roadmap'
     | '/services'
     | '/team'
     | '/whitepaper'
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/dashboard'
     | '/pricing'
+    | '/roadmap'
     | '/services'
     | '/team'
     | '/whitepaper'
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRouteWithChildren
   PricingRoute: typeof PricingRoute
+  RoadmapRoute: typeof RoadmapRoute
   ServicesRoute: typeof ServicesRoute
   TeamRoute: typeof TeamRoute
   WhitepaperRoute: typeof WhitepaperRoute
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roadmap': {
+      id: '/roadmap'
+      path: '/roadmap'
+      fullPath: '/roadmap'
+      preLoaderRoute: typeof RoadmapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/services': {
@@ -375,6 +395,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRouteWithChildren,
   PricingRoute: PricingRoute,
+  RoadmapRoute: RoadmapRoute,
   ServicesRoute: ServicesRoute,
   TeamRoute: TeamRoute,
   WhitepaperRoute: WhitepaperRoute,

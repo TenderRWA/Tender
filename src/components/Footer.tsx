@@ -24,6 +24,7 @@ const LINKS: { label: string; to: string; newTab?: boolean }[] = [
   { label: "Services", to: "/services" },
   { label: "Pricing", to: "/pricing" },
   { label: "Whitepaper", to: "/whitepaper", newTab: true },
+  { label: "Roadmap", to: "/roadmap", newTab: true },
   { label: "Contact", to: "/contact" },
   { label: "Terms", to: "/contact#terms" },
 ];
