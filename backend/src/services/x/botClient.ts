@@ -92,12 +92,28 @@ export async function listNewMentions(params: {
 }
 
 export async function replyToMention(tweetId: string, text: string): Promise<{ id: string }> {
-  const res = await authedFetch("/tweets", {
-    method: "POST",
-    body: JSON.stringify({
-      text,
-      reply: { in_reply_to_tweet_id: tweetId },
-    }),
-  });
-  return { id: res.data.id };
+  try {
+    const res = await authedFetch("/tweets", {
+      method: "POST",
+      body: JSON.stringify({
+        text,
+        reply: { in_reply_to_tweet_id: tweetId },
+      }),
+    });
+    return { id: res.data.id };
+  } catch (err: any) {
+    if (err.message && err.message.includes("duplicate content")) {
+      const nonce = Math.random().toString(36).slice(2, 6);
+      const uniqueText = `${text} · ref:${nonce}`;
+      const retryRes = await authedFetch("/tweets", {
+        method: "POST",
+        body: JSON.stringify({
+          text: uniqueText,
+          reply: { in_reply_to_tweet_id: tweetId },
+        }),
+      });
+      return { id: retryRes.data.id };
+    }
+    throw err;
+  }
 }
