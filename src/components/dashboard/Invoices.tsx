@@ -1,5 +1,4 @@
-import { useState } from "react";
-
+import { useState, useMemo } from "react";
 import ModulePage from "@/components/dashboard/ModulePage";
 import DashTable, {
   DashRow,
@@ -7,35 +6,49 @@ import DashTable, {
   StatusPill,
   RECEIPT_TONE,
 } from "@/components/dashboard/DashTable";
-import { useAssets, useCreateInvoice } from "@/hooks/useTender";
+import { useAssets, useCreateInvoice, useInvoices } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
-import type { InvoiceResponse } from "@/types/tender";
+import { useWallet } from "@/lib/wallet/wallet-context";
+import type { InvoiceRecord } from "@/types/tender";
+import { ExternalLink, Copy, Check } from "lucide-react";
 
 const inputCls =
   "w-full glass-soft rounded-xl px-4 py-3 font-body text-sm text-foreground placeholder:text-muted2 focus:outline-none focus:border-red focus:ring-2 focus:ring-red/25 transition-all duration-150";
 
 export default function Invoices() {
   const { handle: sessionHandle } = useTenderSession();
+  const { address: wallet } = useWallet();
   const { data: assets } = useAssets({ featured: true });
   const create = useCreateInvoice();
 
+  // Read persistent invoices from database for this handle and wallet
+  const { data: dbData, isLoading } = useInvoices({
+    handle: sessionHandle,
+    wallet,
+  });
+
   const baseCurrencies = assets?.baseCurrencies ?? [];
 
-  const [invoices, setInvoices] = useState<InvoiceResponse[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [mint, setMint] = useState("");
   const [memo, setMemo] = useState("");
   const [days, setDays] = useState("14");
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const effectiveHandle = (recipient || sessionHandle).trim();
+  const effectiveHandle = (recipient || sessionHandle).trim().replace(/^@/, "");
   const parsed = Number(amount);
   const valid = Number.isFinite(parsed) && parsed > 0 && effectiveHandle.length > 0;
 
+  const invoices = useMemo<InvoiceRecord[]>(() => {
+    return dbData?.invoices ?? [];
+  }, [dbData]);
+
   const submit = () => {
     if (!valid || create.isPending) return;
+    const chosenToken = baseCurrencies.find((b) => b.mint === mint);
+
     create.mutate(
       {
         recipientHandle: effectiveHandle,
@@ -45,8 +58,7 @@ export default function Invoices() {
         expiryMinutes: Math.max(1, Math.round(Number(days || 14) * 24 * 60)),
       },
       {
-        onSuccess: (invoice) => {
-          setInvoices((list) => [invoice, ...list]);
+        onSuccess: () => {
           setAmount("");
           setMemo("");
           setFormOpen(false);
@@ -55,13 +67,13 @@ export default function Invoices() {
     );
   };
 
-  const copyPayUrl = async (invoice: InvoiceResponse) => {
+  const copyToClipboard = async (text: string, key: string) => {
     try {
-      await navigator.clipboard.writeText(invoice.payUrl);
-      setCopied(invoice.invoiceId);
-      window.setTimeout(() => setCopied(null), 2500);
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey(null), 2500);
     } catch {
-      /* clipboard blocked — the URL is still shown in the row */
+      /* clipboard blocked */
     }
   };
 
@@ -83,7 +95,7 @@ export default function Invoices() {
         {create.isSuccess && !formOpen && (
           <span className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.12em] text-success">
             <span className="w-1.5 h-1.5 bg-success" aria-hidden />
-            {create.data.invoiceId} CREATED
+            {create.data.id} CREATED
           </span>
         )}
       </div>
@@ -181,25 +193,66 @@ export default function Invoices() {
 
       <DashTable
         caption={`PAY-LINKS · ${invoices.length}`}
-        columns={["ID", "Amount", "Memo", "Expires", "Pay URL", "Status"]}
-        minWidth="min-w-[760px]"
+        columns={["ID", "Amount", "Memo", "Expires", "Share Links", "Status"]}
+        minWidth="min-w-[820px]"
       >
         {invoices.map((inv) => (
-          <DashRow key={inv.invoiceId}>
-            <DashCell className="font-mono text-xs text-foreground">{inv.invoiceId}</DashCell>
-            <DashCell className="font-mono text-xs text-foreground">{inv.amount}</DashCell>
-            <DashCell className="max-w-[220px] truncate">{inv.memo}</DashCell>
+          <DashRow key={inv.id}>
+            <DashCell className="font-mono text-xs text-foreground">
+              <a
+                href={inv.payUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-foreground hover:text-red transition-colors group"
+              >
+                <span>{inv.id}</span>
+                <ExternalLink className="w-3 h-3 text-muted2 group-hover:text-red shrink-0" />
+              </a>
+            </DashCell>
+            <DashCell className="font-mono text-xs font-semibold text-foreground">
+              {Number(inv.amount).toLocaleString()}{" "}
+              <span className="text-secondary2 font-normal">{inv.tokenSymbol || "USDC"}</span>
+            </DashCell>
+            <DashCell className="max-w-[200px] truncate text-muted2">
+              {inv.memo || "—"}
+            </DashCell>
             <DashCell className="font-mono text-xs text-muted2">
-              {new Date(inv.expiresAt).toLocaleString("en-US", { hour12: false })}
+              {new Date(inv.expiresAt).toLocaleDateString()}
             </DashCell>
             <DashCell>
-              <button
-                type="button"
-                onClick={() => copyPayUrl(inv)}
-                className="font-mono text-[10px] uppercase tracking-[0.12em] border border-hairline/60 hover:border-red text-secondary2 hover:text-foreground rounded-full px-3 py-1 transition-colors duration-150"
-              >
-                {copied === inv.invoiceId ? "Copied ✓" : "Copy Solana Pay link"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(inv.payUrl, `web-${inv.id}`)}
+                  className="font-mono text-[10px] uppercase tracking-[0.12em] border border-hairline/80 hover:border-red text-secondary2 hover:text-foreground rounded-lg px-2.5 py-1 transition-colors duration-150 inline-flex items-center gap-1"
+                >
+                  {copiedKey === `web-${inv.id}` ? (
+                    <>
+                      <Check className="w-3 h-3 text-success" />
+                      <span>Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-muted2" />
+                      <span>Web Link</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(inv.solanaPayUrl, `sol-${inv.id}`)}
+                  className="font-mono text-[10px] uppercase tracking-[0.12em] border border-hairline/80 hover:border-red text-secondary2 hover:text-foreground rounded-lg px-2.5 py-1 transition-colors duration-150 inline-flex items-center gap-1"
+                >
+                  {copiedKey === `sol-${inv.id}` ? (
+                    <>
+                      <Check className="w-3 h-3 text-success" />
+                      <span>Copied</span>
+                    </>
+                  ) : (
+                    <span>Solana Pay</span>
+                  )}
+                </button>
+              </div>
             </DashCell>
             <DashCell>
               <StatusPill tone={RECEIPT_TONE[inv.status] ?? "muted"} label={inv.status} />
@@ -208,10 +261,15 @@ export default function Invoices() {
         ))}
       </DashTable>
 
-      {invoices.length === 0 && (
+      {isLoading && (
+        <p className="font-body text-sm text-muted2 py-4">
+          Loading persistent invoices from the TENDER rail…
+        </p>
+      )}
+
+      {!isLoading && invoices.length === 0 && (
         <p className="font-body text-sm text-muted2">
-          Invoices created in this session appear here with their Solana Pay URL. The API has no
-          invoice-listing endpoint yet, so past pay-links are not read back.
+          No invoices recorded for this handle yet. Click "+ Create Invoice" to generate a shareable pay-link.
         </p>
       )}
     </ModulePage>
