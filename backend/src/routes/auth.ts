@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { randomBytes } from "crypto";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
 import { config } from "../config";
 import { query } from "../db";
 import {
@@ -31,14 +33,44 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// GET /api/v1/auth/x/login?wallet=<solana_pubkey>&return_url=<url>
+export function verifySolanaSignature(params: {
+  wallet: string;
+  signature: string;
+  message: string;
+}): boolean {
+  try {
+    const pubkeyBytes = bs58.decode(params.wallet);
+    const sigBytes = bs58.decode(params.signature);
+    const msgBytes = new TextEncoder().encode(params.message);
+    return nacl.sign.detached.verify(msgBytes, sigBytes, pubkeyBytes);
+  } catch (err) {
+    console.error("Signature verification error:", err);
+    return false;
+  }
+}
+
+// GET /api/v1/auth/x/login?wallet=<pubkey>&signature=<base58_sig>&message=<signed_text>&return_url=<url>
 authRouter.get("/x/login", (req: Request, res: Response) => {
   const wallet = (req.query.wallet as string)?.trim();
+  const signature = (req.query.signature as string)?.trim();
+  const message = (req.query.message as string)?.trim();
   const returnUrl = (req.query.return_url as string)?.trim();
 
   if (!wallet) {
     res.status(400).json({ error: "wallet query parameter is required" });
     return;
+  }
+
+  // If signature is provided, cryptographically verify wallet ownership
+  if (signature && message) {
+    const isValid = verifySolanaSignature({ wallet, signature, message });
+    if (!isValid) {
+      console.warn(`[X Auth] Cryptographic signature check failed for wallet ${wallet}`);
+      const fallbackTarget = returnUrl || `${config.frontendUrl}/dashboard`;
+      res.redirect(`${fallbackTarget}?x_error=${encodeURIComponent("invalid_wallet_signature")}`);
+      return;
+    }
+    console.log(`[X Auth] ✅ Verified cryptographic wallet ownership for ${wallet}`);
   }
 
   const { codeVerifier, codeChallenge } = generatePkcePair();
