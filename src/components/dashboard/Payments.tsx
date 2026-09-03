@@ -49,6 +49,14 @@ function formatDisplayError(raw: string): string {
     return "Price impact exceeds slippage bounds. Try settling a smaller amount.";
   }
 
+  if (low.includes("user rejected") || low.includes("cancelled") || low.includes("declined")) {
+    return "Transaction was cancelled in your wallet.";
+  }
+
+  if (low.includes("internal error") || low.includes("-32603")) {
+    return "Wallet transaction simulation failed. Please ensure your wallet has sufficient SOL for network rent fees.";
+  }
+
   const clean = raw
     .replace(/\{[^{}]*\}/g, "")
     .replace(/\b(?:400|404|500)\b/g, "")
