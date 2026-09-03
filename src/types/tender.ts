@@ -201,6 +201,8 @@ export interface InvoiceRecord {
   status: "pending" | "paid" | "expired";
   signature?: string;
   payerWallet?: string;
+  creatorWallet?: string;
+  creatorHandle?: string;
   createdAt: string;
   expiresAt: string;
   paidAt?: string;
