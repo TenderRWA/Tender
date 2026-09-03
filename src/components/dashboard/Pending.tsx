@@ -29,6 +29,14 @@ import { useWallet } from "@/lib/wallet/wallet-context";
 const truncate = (val: string, len = 10) =>
   val.length > len ? `${val.slice(0, 6)}…${val.slice(-4)}` : val;
 
+const formatAmount = (amt: string | number) => {
+  const num = typeof amt === "number" ? amt : parseFloat(String(amt)) || 0;
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
 type FilterTab = "all" | "x_bot" | "invoices";
 
 export default function Pending() {
@@ -192,7 +200,7 @@ export default function Pending() {
 
                     <DashCell>
                       <span className="font-mono font-semibold text-foreground">
-                        {s.inputAmount} <span className="text-red">{s.inputToken}</span>
+                        {formatAmount(s.inputAmount)} <span className="text-red">{s.inputToken}</span>
                       </span>
                     </DashCell>
 
@@ -220,15 +228,7 @@ export default function Pending() {
                     </DashCell>
 
                     <DashCell>
-                      <StatusPill
-                        status={
-                          s.status === "completed"
-                            ? "settled"
-                            : s.status === "cancelled"
-                            ? "expired"
-                            : "open"
-                        }
-                      />
+                      <StatusPill status={s.status} />
                     </DashCell>
 
                     <DashCell align="right">
@@ -296,7 +296,7 @@ export default function Pending() {
             ) : (
               <DashTable
                 caption="Pending Invoices"
-                columns={["INVOICE ID", "RECIPIENT", "AMOUNT", "MEMO", "EXPIRES", "ACTION"]}
+                columns={["INVOICE ID", "RECIPIENT", "AMOUNT", "MEMO", "STATUS", "EXPIRES", "ACTION"]}
               >
                 {invoices.map((inv) => (
                   <DashRow key={inv.id}>
@@ -314,7 +314,7 @@ export default function Pending() {
 
                     <DashCell>
                       <span className="font-mono font-semibold text-foreground">
-                        {inv.amount} <span className="text-red">{inv.tokenSymbol || "USDC"}</span>
+                        {formatAmount(inv.amount)} <span className="text-red">{inv.tokenSymbol || "USDC"}</span>
                       </span>
                     </DashCell>
 
@@ -322,6 +322,10 @@ export default function Pending() {
                       <span className="font-body text-xs text-muted2 truncate max-w-[150px] block">
                         {inv.memo || "—"}
                       </span>
+                    </DashCell>
+
+                    <DashCell>
+                      <StatusPill status={inv.status} />
                     </DashCell>
 
                     <DashCell>
@@ -489,7 +493,7 @@ function SettlementSignModal({
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="text-muted2">Settled Amount</span>
                 <span className="text-foreground font-semibold">
-                  {settlement.inputAmount} {settlement.inputToken}
+                  {formatAmount(settlement.inputAmount)} {settlement.inputToken}
                 </span>
               </div>
             </div>
@@ -527,7 +531,7 @@ function SettlementSignModal({
                   Amount
                 </span>
                 <span className="font-mono text-xl font-bold text-foreground">
-                  {settlement.inputAmount} <span className="text-red">{settlement.inputToken}</span>
+                  {formatAmount(settlement.inputAmount)} <span className="text-red">{settlement.inputToken}</span>
                 </span>
               </div>
             </div>
@@ -622,7 +626,7 @@ function SettlementSignModal({
                 </>
               ) : (
                 <>
-                  <span>Sign & Settle {settlement.inputAmount} {settlement.inputToken}</span>
+                  <span>Sign & Settle {formatAmount(settlement.inputAmount)} {settlement.inputToken}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
