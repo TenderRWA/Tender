@@ -263,14 +263,29 @@ export async function routeBotIntent(params: {
       return `${pct}% ${leg.assetSymbol}`;
     });
 
+    const quoteOutputs = portfolioQuote.legs.map((leg) => {
+      const outAmt = parseFloat(leg.quote.outAmountFormatted || "0");
+      let displayAmt = "";
+      if (outAmt <= 0) {
+        displayAmt = `${(leg.basisPoints / 100).toFixed(0)}%`;
+      } else if (outAmt < 0.0001) {
+        displayAmt = `~${outAmt.toPrecision(2)}`;
+      } else if (outAmt < 1) {
+        displayAmt = `~${outAmt.toFixed(5).replace(/0+$/, "").replace(/\.$/, "")}`;
+      } else {
+        displayAmt = `~${outAmt.toFixed(2)}`;
+      }
+      return `${displayAmt} ${leg.assetSymbol}`;
+    });
+
     const summaryList = portfolioQuote.legs.map((leg) => ({
       symbol: leg.assetSymbol,
       percentage: leg.basisPoints / 100,
       allocatedAmount: leg.allocatedInAmountFormatted,
     }));
 
-    // Save pending settlement row if tweet ID provided
-    if (tweetId) {
+    // Save pending settlement row ONLY for payment actions (pay/send/tip), NEVER for quotes
+    if (tweetId && intent.action !== "quote") {
       try {
         await query(
           `INSERT INTO pending_settlements (
@@ -298,7 +313,7 @@ export async function routeBotIntent(params: {
 
     const replyText =
       intent.action === "quote"
-        ? `Quote for @${cleanHandle}: ${intent.amount} ${inToken.symbol} slices into ${breakdownPills.join(", ")}. Tap the link in my bio to settle on TENDER.`
+        ? `Quote for @${cleanHandle}: ${intent.amount} ${inToken.symbol} estimates into ${quoteOutputs.join(", ")}. Tap the link in my bio to open the terminal.`
         : `Slicing ${intent.amount} ${inToken.symbol} for @${cleanHandle} into ${breakdownPills.join(", ")}. Tap the link in my bio to review and sign it in your dashboard.`;
 
     return {
