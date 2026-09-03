@@ -22,6 +22,7 @@ import { Route as DashboardElectionsRouteImport } from './routes/dashboard.elect
 import { Route as DashboardInvoicesRouteImport } from './routes/dashboard.invoices'
 import { Route as DashboardPaymentsRouteImport } from './routes/dashboard.payments'
 import { Route as DashboardUniverseRouteImport } from './routes/dashboard.universe'
+import { Route as PayInvoiceIdRouteImport } from './routes/pay.$invoiceId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -88,6 +89,11 @@ const DashboardUniverseRoute = DashboardUniverseRouteImport.update({
   path: '/universe',
   getParentRoute: () => DashboardRoute,
 } as any)
+const PayInvoiceIdRoute = PayInvoiceIdRouteImport.update({
+  id: '/pay/$invoiceId',
+  path: '/pay/$invoiceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
+  '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRoutesByTo {
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
+  '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard': typeof DashboardIndexRoute
 }
 export interface FileRoutesById {
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/dashboard/invoices': typeof DashboardInvoicesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/universe': typeof DashboardUniverseRoute
+  '/pay/$invoiceId': typeof PayInvoiceIdRoute
   '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRouteTypes {
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/dashboard/invoices'
     | '/dashboard/payments'
     | '/dashboard/universe'
+    | '/pay/$invoiceId'
     | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/dashboard/invoices'
     | '/dashboard/payments'
     | '/dashboard/universe'
+    | '/pay/$invoiceId'
     | '/dashboard'
   id:
     | '__root__'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/dashboard/invoices'
     | '/dashboard/payments'
     | '/dashboard/universe'
+    | '/pay/$invoiceId'
     | '/dashboard/'
   fileRoutesById: FileRoutesById
 }
@@ -189,6 +201,7 @@ export interface RootRouteChildren {
   ServicesRoute: typeof ServicesRoute
   TeamRoute: typeof TeamRoute
   WorkRoute: typeof WorkRoute
+  PayInvoiceIdRoute: typeof PayInvoiceIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardUniverseRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/pay/$invoiceId': {
+      id: '/pay/$invoiceId'
+      path: '/pay/$invoiceId'
+      fullPath: '/pay/$invoiceId'
+      preLoaderRoute: typeof PayInvoiceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -317,6 +337,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServicesRoute: ServicesRoute,
   TeamRoute: TeamRoute,
   WorkRoute: WorkRoute,
+  PayInvoiceIdRoute: PayInvoiceIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
