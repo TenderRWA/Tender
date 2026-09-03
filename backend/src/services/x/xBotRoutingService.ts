@@ -1,0 +1,164 @@
+import { query } from "../../db";
+import { resolveSolanaToken } from "../../lib/rwaTokens";
+import { calculatePortfolioElectionQuotes, formatTokenUnits } from "../dualQuoteEngine";
+import type { ParsedBotIntent } from "./groqIntentParser";
+
+export interface BotRoutingResult {
+  replyText: string;
+  recipientHandle: string;
+  recipientWallet: string;
+  isRegistered: boolean;
+  portfolioSummary?: Array<{ symbol: string; percentage: number; allocatedAmount: string }>;
+}
+
+export async function routeBotIntent(params: {
+  intent: ParsedBotIntent;
+  authorHandle?: string;
+  authorId?: string;
+  tweetId?: string;
+}): Promise<BotRoutingResult> {
+  const { intent, authorHandle, authorId, tweetId } = params;
+
+  // 1. Help action
+  if (intent.action === "help") {
+    return {
+      replyText:
+        "TENDER settles incoming payments into custom stock portfolios on Solana. Mention me with:\n• 'pay @handle 50 USDC'\n• 'quote 100 USDC for @handle'\nTap the link in my bio to claim your handle.",
+      recipientHandle: "",
+      recipientWallet: "",
+      isRegistered: false,
+    };
+  }
+
+  // 2. Unrecognized action
+  if (intent.action === "unrecognized" || !intent.target || !intent.amount) {
+    return {
+      replyText:
+        "Couldn't identify a payment recipient or amount. Try: '@TenderRWABot pay @handle 50 USDC'. Tap the link in my bio to open the terminal.",
+      recipientHandle: "",
+      recipientWallet: "",
+      isRegistered: false,
+    };
+  }
+
+  const cleanHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
+  const tokenSymbol = (intent.token || "USDC").toUpperCase();
+  const inToken = resolveSolanaToken(tokenSymbol);
+
+  if (!inToken) {
+    return {
+      replyText: `Unsupported payment token '${tokenSymbol}'. TENDER accepts USDC or SOL on Solana. Tap the link in my bio for details.`,
+      recipientHandle: cleanHandle,
+      recipientWallet: "",
+      isRegistered: false,
+    };
+  }
+
+  // 3. Lookup handle in registry
+  const handleRes = await query(
+    "SELECT handle, owner_wallet FROM handles WHERE handle = $1",
+    [cleanHandle]
+  );
+
+  if (!handleRes.rows || handleRes.rows.length === 0) {
+    return {
+      replyText: `@${cleanHandle} hasn't registered a portfolio election on TENDER yet. Tap the link in my bio to claim this handle and choose your stock mix.`,
+      recipientHandle: cleanHandle,
+      recipientWallet: "",
+      isRegistered: false,
+    };
+  }
+
+  const recipientWallet = handleRes.rows[0].owner_wallet;
+
+  // 4. Lookup active elections
+  const electionsRes = await query(
+    "SELECT asset_symbol, asset_mint, basis_points FROM handle_elections WHERE handle = $1 AND is_active = TRUE",
+    [cleanHandle]
+  );
+
+  if (!electionsRes.rows || electionsRes.rows.length === 0) {
+    return {
+      replyText: `@${cleanHandle} has no active portfolio elections set. Tap the link in my bio to update portfolio preferences.`,
+      recipientHandle: cleanHandle,
+      recipientWallet,
+      isRegistered: true,
+    };
+  }
+
+  const elections = electionsRes.rows.map((r: any) => ({
+    assetSymbol: r.asset_symbol,
+    assetMint: r.asset_mint,
+    basisPoints: r.basis_points,
+  }));
+
+  const inDecimals = inToken.decimals;
+  const inAmountBig = BigInt(Math.round(intent.amount * 10 ** inDecimals));
+
+  try {
+    const portfolioQuote = await calculatePortfolioElectionQuotes({
+      inputMint: inToken.mint,
+      totalAmountIn: inAmountBig.toString(),
+      elections,
+      recipientWallet,
+    });
+
+    const breakdownPills = portfolioQuote.legs.map((leg) => {
+      const pct = (leg.basisPoints / 100).toFixed(0);
+      return `${pct}% ${leg.assetSymbol}`;
+    });
+
+    const summaryList = portfolioQuote.legs.map((leg) => ({
+      symbol: leg.assetSymbol,
+      percentage: leg.basisPoints / 100,
+      allocatedAmount: leg.allocatedInAmountFormatted,
+    }));
+
+    // Save pending settlement row if tweet ID provided
+    if (tweetId) {
+      try {
+        await query(
+          `INSERT INTO pending_settlements (
+             source_ref, author_x_id, author_x_handle,
+             recipient_handle, recipient_wallet,
+             input_token, input_amount, portfolio_summary, tweet_url, status
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+           ON CONFLICT (source_ref) DO NOTHING`,
+          [
+            tweetId,
+            authorId || null,
+            authorHandle || null,
+            cleanHandle,
+            recipientWallet,
+            inToken.symbol,
+            intent.amount,
+            JSON.stringify(summaryList),
+            `https://x.com/${authorHandle || "i"}/status/${tweetId}`,
+          ]
+        );
+      } catch (err) {
+        console.warn("Could not save pending settlement, continuing:", err);
+      }
+    }
+
+    const replyText =
+      intent.action === "quote"
+        ? `Quote for @${cleanHandle}: ${intent.amount} ${inToken.symbol} slices into ${breakdownPills.join(", ")}. Tap the link in my bio to settle on TENDER.`
+        : `Slicing ${intent.amount} ${inToken.symbol} for @${cleanHandle} into ${breakdownPills.join(", ")}. Tap the link in my bio to review and sign it in your dashboard.`;
+
+    return {
+      replyText,
+      recipientHandle: cleanHandle,
+      recipientWallet,
+      isRegistered: true,
+      portfolioSummary: summaryList,
+    };
+  } catch (err: any) {
+    return {
+      replyText: `Could not quote @${cleanHandle}'s election: ${err.message}. Tap the link in my bio to check portfolio assets.`,
+      recipientHandle: cleanHandle,
+      recipientWallet,
+      isRegistered: true,
+    };
+  }
+}

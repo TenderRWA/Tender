@@ -24,4 +24,21 @@ export const config = {
     wallet: process.env.TENDER_FEE_WALLET || "2aCStNyta182cUEry72GNNP7R2CcyErGWA8DLQVjjw3D",
     bps: parseInt(process.env.TENDER_FEE_BPS || "15", 10),
   },
+
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || "",
+    model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+  },
+
+  x: {
+    clientId: process.env.X_CLIENT_ID || "",
+    clientSecret: process.env.X_CLIENT_SECRET || "",
+    oauthRedirectUri: process.env.X_OAUTH_REDIRECT_URI || "https://api.tenderrwa.com/api/v1/auth/x/callback",
+    botAccessTokenSeed: process.env.X_ACCESS_TOKEN || "",
+    botRefreshTokenSeed: process.env.X_REFRESH_TOKEN || "",
+    mentionsPollIntervalMs: parseInt(process.env.X_BOT_MENTIONS_POLL_INTERVAL_MS || "30000", 10),
+    botEnabled: (process.env.X_BOT_ENABLED ?? "true") !== "false",
+    botHandle: "TenderRWABot",
+    mainHandle: "TenderRWA",
+  },
 };

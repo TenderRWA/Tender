@@ -5,6 +5,7 @@ import { assetsRouter } from "./routes/assets";
 import { handlesRouter } from "./routes/handles";
 import { settleRouter } from "./routes/settle";
 import { invoicesRouter } from "./routes/invoices";
+import { botRouter } from "./routes/bot";
 
 export const app = express();
 
@@ -60,6 +61,7 @@ app.use("/api/v1/handles", handlesRouter);
 app.use("/api/v1/settle", settleRouter);
 app.use("/api/v1/invoices", invoicesRouter);
 app.use("/api/v1/solana-pay", invoicesRouter);
+app.use("/api/v1/bot", botRouter);
 
 // Fallback 404 handler
 app.use((_req, res) => {
