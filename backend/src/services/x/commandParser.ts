@@ -60,5 +60,34 @@ export function parseFastCommand(text: string): ParsedBotIntent | null {
     }
   }
 
+  // 4. Election / Portfolio query: "election @nothipposol", "portfolio @whoknows", "elections for @nothipposol"
+  const electionRegex = /^(?:election|elections|portfolio|allocation|allocations|view|info|check)\s+(?:for\s+)?([@a-zA-Z0-9_-]{3,64})$/i;
+  const matchElection = clean.match(electionRegex);
+  if (matchElection) {
+    const target = matchElection[1].startsWith("@") ? matchElection[1] : `@${matchElection[1]}`;
+    return {
+      action: "election",
+      target,
+      amount: null,
+      token: null,
+      memo: null,
+      confidence: 1.0,
+    };
+  }
+
+  // 5. Bare handle query: "@nothipposol"
+  const bareHandleRegex = /^([@a-zA-Z0-9_-]{3,64})$/;
+  const matchBare = clean.match(bareHandleRegex);
+  if (matchBare && matchBare[1].startsWith("@")) {
+    return {
+      action: "election",
+      target: matchBare[1],
+      amount: null,
+      token: null,
+      memo: null,
+      confidence: 0.9,
+    };
+  }
+
   return null;
 }
