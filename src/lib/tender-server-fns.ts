@@ -298,6 +298,8 @@ export const createInvoice = createServerFn({ method: "POST" })
       tokenMint: z.string().trim().min(32).optional(),
       memo: z.string().trim().optional(),
       expiryMinutes: z.number().int().positive().optional(),
+      creatorWallet: z.string().trim().optional(),
+      creatorHandle: z.string().trim().optional(),
     }),
   )
   .handler(({ data }): Promise<InvoiceResponse> =>
