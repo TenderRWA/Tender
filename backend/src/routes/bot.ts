@@ -179,7 +179,7 @@ botRouter.post("/pending/:id/confirm", async (req: Request, res: Response) => {
     const result = await query(
       `UPDATE pending_settlements
        SET status = 'completed', signature = $1, settled_at = NOW(), updated_at = NOW()
-       WHERE id = $2 OR source_ref = $2
+       WHERE id::text = $2::text OR source_ref = $2::text
        RETURNING *`,
       [signature, id]
     );
