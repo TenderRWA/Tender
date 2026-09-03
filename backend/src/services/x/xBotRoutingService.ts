@@ -2,6 +2,7 @@ import { query } from "../../db";
 import { resolveSolanaToken } from "../../lib/rwaTokens";
 import { calculatePortfolioElectionQuotes, formatTokenUnits } from "../dualQuoteEngine";
 import type { ParsedBotIntent } from "./groqIntentParser";
+import { isValidSolanaAddress, resolveNftMetadata } from "../nftService";
 
 export interface BotRoutingResult {
   replyText: string;
@@ -157,6 +158,104 @@ export async function routeBotIntent(params: {
     const memoPart = intent.memo ? ` · Memo: ${intent.memo}` : "";
     return {
       replyText: `Invoice recorded for @${payerHandle} (${intent.amount} ${finalSymbol}${memoPart}). Tap the link in my bio to view and pay.`,
+      recipientHandle,
+      recipientWallet,
+      isRegistered: true,
+    };
+  }
+
+  // 3b. Send NFT action: Direct sovereign transfer, bypasses elections
+  if (intent.action === "send_nft" && intent.target && intent.memo) {
+    const cleanHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
+    const nftMint = intent.memo.trim();
+
+    if (!isValidSolanaAddress(nftMint)) {
+      return {
+        replyText: `@${cleanHandle} Invalid NFT mint address '${nftMint}'. Please provide a valid 32-44 character Solana mint.`,
+        recipientHandle: cleanHandle,
+        recipientWallet: "",
+        isRegistered: false,
+      };
+    }
+
+    let recipientHandle = cleanHandle;
+    let recipientWallet = "";
+
+    const handleRes = await query(
+      "SELECT handle, owner_wallet FROM handles WHERE LOWER(handle) = $1 OR LOWER(x_username) = $1 LIMIT 1",
+      [cleanHandle]
+    );
+
+    if (handleRes.rows && handleRes.rows.length > 0) {
+      recipientHandle = handleRes.rows[0].handle;
+      recipientWallet = handleRes.rows[0].owner_wallet;
+    } else {
+      const xAccRes = await query(
+        "SELECT wallet_address, x_username FROM x_accounts WHERE LOWER(x_username) = $1 LIMIT 1",
+        [cleanHandle]
+      );
+      if (xAccRes.rows && xAccRes.rows.length > 0) {
+        recipientWallet = xAccRes.rows[0].wallet_address;
+        const wHandleRes = await query(
+          "SELECT handle FROM handles WHERE owner_wallet = $1 LIMIT 1",
+          [recipientWallet]
+        );
+        if (wHandleRes.rows && wHandleRes.rows.length > 0) {
+          recipientHandle = wHandleRes.rows[0].handle;
+        }
+      }
+    }
+
+    if (!recipientWallet) {
+      return {
+        replyText: `@${cleanHandle} hasn't registered their tag on TENDER yet. Tap the link in my bio to claim this handle and receive NFTs.`,
+        recipientHandle: cleanHandle,
+        recipientWallet: "",
+        isRegistered: false,
+      };
+    }
+
+    const nftMeta = await resolveNftMetadata(nftMint);
+    const nftName = nftMeta.name || `NFT (${nftMint.slice(0, 4)}…${nftMint.slice(-4)})`;
+
+    if (tweetId) {
+      try {
+        await query(
+          `INSERT INTO pending_settlements (
+             source_ref, author_x_id, author_x_handle,
+             recipient_handle, recipient_wallet,
+             input_token, input_amount, token_mint, asset_type, portfolio_summary, tweet_url, status
+           ) VALUES ($1, $2, $3, $4, $5, 'NFT', 1, $6, 'nft', $7, $8, 'pending')
+           ON CONFLICT (source_ref) DO NOTHING`,
+          [
+            tweetId,
+            authorId || null,
+            authorHandle || null,
+            recipientHandle,
+            recipientWallet,
+            nftMint,
+            JSON.stringify([
+              {
+                symbol: "NFT",
+                name: nftName,
+                mint: nftMint,
+                image: nftMeta.image,
+                percentage: 100,
+                allocatedAmount: "1",
+                isNft: true,
+              },
+            ]),
+            tweetId ? `https://x.com/${authorHandle || "i"}/status/${tweetId}` : null,
+          ]
+        );
+      } catch (dbErr) {
+        console.error("[Bot Service] Failed to save pending NFT settlement:", dbErr);
+      }
+    }
+
+    const shortWallet = `${recipientWallet.slice(0, 4)}…${recipientWallet.slice(-4)}`;
+    return {
+      replyText: `NFT transfer staged for @${recipientHandle}! 🖼️ Direct sovereign transfer of ${nftName} to @${recipientHandle} (${shortWallet}). Tap the link in my bio to review and sign in your dashboard.`,
       recipientHandle,
       recipientWallet,
       isRegistered: true,
