@@ -11,12 +11,26 @@ import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
 import { config } from "../config";
 import { fetchJupiterSwapInstructions, type JupiterQuoteResponse } from "./jupiterService";
 import type { DualQuoteResult, PortfolioQuoteResult } from "./dualQuoteEngine";
 
 const connection = new Connection(config.solanaRpcUrl, "confirmed");
+
+export async function resolveTokenProgramId(mint: PublicKey): Promise<PublicKey> {
+  try {
+    const info = await connection.getAccountInfo(mint);
+    if (info?.owner && info.owner.equals(TOKEN_2022_PROGRAM_ID)) {
+      return TOKEN_2022_PROGRAM_ID;
+    }
+  } catch (err) {
+    console.warn("Could not query mint program ID, defaulting to standard:", err);
+  }
+  return TOKEN_PROGRAM_ID;
+}
 
 function deserializeInstruction(instruction: any): TransactionInstruction {
   return new TransactionInstruction({
@@ -143,15 +157,17 @@ export async function buildDirectTransferTx(params: {
     );
   } else {
     const mintPubkey = new PublicKey(params.tokenMint);
-    const sourceAta = getAssociatedTokenAddressSync(mintPubkey, userPubkey);
-    const destAta = getAssociatedTokenAddressSync(mintPubkey, recipientPubkey, true);
+    const tokenProgramId = await resolveTokenProgramId(mintPubkey);
+    const sourceAta = getAssociatedTokenAddressSync(mintPubkey, userPubkey, false, tokenProgramId);
+    const destAta = getAssociatedTokenAddressSync(mintPubkey, recipientPubkey, true, tokenProgramId);
 
     instructions.push(
       createAssociatedTokenAccountIdempotentInstruction(
         userPubkey,
         destAta,
         recipientPubkey,
-        mintPubkey
+        mintPubkey,
+        tokenProgramId
       )
     );
 
@@ -162,7 +178,9 @@ export async function buildDirectTransferTx(params: {
         destAta,
         userPubkey,
         BigInt(params.amount),
-        params.decimals
+        params.decimals,
+        [],
+        tokenProgramId
       )
     );
   }
@@ -229,7 +247,13 @@ export async function buildSettlementTxPlan(params: {
       outMint || params.quote.rawWinnerQuote.jupiterQuote.outputMint
     );
 
-    const recipientAta = getAssociatedTokenAddressSync(resolvedOutMint, recipientPubkey, true);
+    const tokenProgramId = await resolveTokenProgramId(resolvedOutMint);
+    const recipientAta = getAssociatedTokenAddressSync(
+      resolvedOutMint,
+      recipientPubkey,
+      true,
+      tokenProgramId
+    );
 
     // Prepend idempotent ATA creation for recipient so Jupiter has an existing destination ATA
     const prependInstructions = [
@@ -237,7 +261,8 @@ export async function buildSettlementTxPlan(params: {
         userPubkey,
         recipientAta,
         recipientPubkey,
-        resolvedOutMint
+        resolvedOutMint,
+        tokenProgramId
       ),
     ];
 
