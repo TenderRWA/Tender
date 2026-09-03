@@ -147,6 +147,8 @@ botRouter.get("/pending", async (req: Request, res: Response) => {
       recipientWallet: row.recipient_wallet,
       inputToken: row.input_token || "USDC",
       inputAmount: String(row.input_amount),
+      tokenMint: row.token_mint || undefined,
+      assetType: row.asset_type || "token",
       portfolioSummary: row.portfolio_summary,
       tweetUrl: row.tweet_url,
       status: row.status,
