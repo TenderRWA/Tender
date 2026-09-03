@@ -20,10 +20,10 @@ export default function ConnectWalletButton({ className = "" }: { className?: st
           type="button"
           onClick={() => void disconnect()}
           title={`${walletName} · ${address} — click to disconnect`}
-          className={`inline-flex h-9 items-center gap-2 rounded-full border border-hairline px-3.5 font-mono text-[12px] tracking-[0.1em] text-ink/75 uppercase transition-colors duration-150 hover:border-red hover:text-ink ${className}`}
+          className={`inline-flex h-9 items-center gap-2 whitespace-nowrap shrink-0 rounded-full border border-hairline px-3.5 font-mono text-[12px] tracking-[0.1em] text-ink/75 uppercase transition-colors duration-150 hover:border-red hover:text-ink ${className}`}
         >
-          {walletIcon && <img src={walletIcon} alt="" className="h-4 w-4 rounded" aria-hidden />}
-          {truncate(address)}
+          {walletIcon && <img src={walletIcon} alt="" className="h-4 w-4 rounded shrink-0" aria-hidden />}
+          <span>{truncate(address)}</span>
           <span className="text-muted2">· Disconnect</span>
         </button>
       ) : (
