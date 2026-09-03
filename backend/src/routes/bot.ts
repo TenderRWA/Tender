@@ -92,7 +92,12 @@ botRouter.get("/status", async (_req: Request, res: Response) => {
 
     if (config.x.botAccessTokenSeed || config.x.botRefreshTokenSeed) {
       try {
-        botUser = await getBotUser();
+        botUser = await Promise.race([
+          getBotUser(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout checking bot credentials")), 2500)
+          ),
+        ]);
       } catch (err: any) {
         authError = err.message;
       }
