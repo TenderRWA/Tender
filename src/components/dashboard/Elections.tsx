@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ModulePage from "@/components/dashboard/ModulePage";
-import AssetPicker from "@/components/dashboard/AssetPicker";
+import AssetPickerModal from "@/components/dashboard/AssetPickerModal";
+import { ChevronDown } from "lucide-react";
 import { useHandle, useUpdateElections } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
@@ -24,6 +25,7 @@ export default function Elections() {
   const [rows, setRows] = useState<ElectionRow[]>([]);
   const [dirty, setDirty] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
+  const [pickerRowId, setPickerRowId] = useState<number | null>(null);
 
   // Seed the editor from the handle's live allocation, and re-seed on handle change.
   useEffect(() => {
@@ -163,11 +165,15 @@ export default function Elections() {
                   dragging === row.id ? "border-red/50" : "hover:border-red/30"
                 }`}
               >
-                <AssetPicker
-                  value={row.symbol}
-                  onSelect={(token) => setAsset(row.id, token)}
-                  label={`Asset for row ${row.symbol || "new"}`}
-                />
+                <button
+                  type="button"
+                  onClick={() => setPickerRowId(row.id)}
+                  className="w-full glass-soft rounded-xl px-3.5 py-2.5 font-mono text-xs text-foreground flex items-center justify-between gap-2 border border-hairline/80 hover:border-red/40 hover:bg-base/80 transition-all text-left"
+                  aria-label={`Select asset for row ${row.symbol || "new"}`}
+                >
+                  <span className="font-semibold truncate">{row.symbol || "Select asset"}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-muted2 shrink-0" />
+                </button>
                 {/* Slider with red fill track */}
                 <input
                   type="range"
@@ -242,6 +248,18 @@ export default function Elections() {
           )}
         </div>
       </div>
+
+      {/* Full 714+ Token Asset Picker Modal */}
+      <AssetPickerModal
+        isOpen={pickerRowId !== null}
+        onClose={() => setPickerRowId(null)}
+        currentSymbol={rows.find((r) => r.id === pickerRowId)?.symbol}
+        onSelect={(token) => {
+          if (pickerRowId !== null) {
+            setAsset(pickerRowId, token);
+          }
+        }}
+      />
     </ModulePage>
   );
 }
