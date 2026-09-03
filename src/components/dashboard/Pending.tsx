@@ -162,8 +162,8 @@ export default function Pending() {
               </div>
             ) : (
               <DashTable
-                headers={["ORIGIN / SOURCE", "AMOUNT", "RECIPIENT", "PORTFOLIO MIX", "STATUS", "ACTION"]}
-                count={botSettlements.length}
+                caption="𝕏 Bot Requests"
+                columns={["ORIGIN / SOURCE", "AMOUNT", "RECIPIENT", "PORTFOLIO MIX", "STATUS", "ACTION"]}
               >
                 {botSettlements.map((s) => (
                   <DashRow key={s.id}>
@@ -295,8 +295,8 @@ export default function Pending() {
               </div>
             ) : (
               <DashTable
-                headers={["INVOICE ID", "RECIPIENT", "AMOUNT", "MEMO", "EXPIRES", "ACTION"]}
-                count={invoices.length}
+                caption="Pending Invoices"
+                columns={["INVOICE ID", "RECIPIENT", "AMOUNT", "MEMO", "EXPIRES", "ACTION"]}
               >
                 {invoices.map((inv) => (
                   <DashRow key={inv.id}>
