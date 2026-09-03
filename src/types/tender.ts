@@ -190,17 +190,36 @@ export interface SettlementHistoryResponse {
 
 // ── Invoices ───────────────────────────────────────────────────────────────
 
-export interface InvoiceResponse {
-  invoiceId: string;
+export interface InvoiceRecord {
+  id: string;
   recipientHandle: string;
   recipientWallet: string;
   amount: string;
   tokenMint: string;
-  memo: string;
+  tokenSymbol: string;
+  memo?: string;
   status: "pending" | "paid" | "expired";
+  signature?: string;
+  payerWallet?: string;
+  createdAt: string;
   expiresAt: string;
-  /** `solana:<api>/api/v1/solana-pay/<id>` — feed straight into a QR encoder. */
+  paidAt?: string;
+  /** Shareable web checkout URL: `https://tenderrwa.com/pay/<id>` */
   payUrl: string;
+  /** Mobile QR code URL: `solana:<api>/api/v1/solana-pay/<id>` */
+  solanaPayUrl: string;
+}
+
+export type InvoiceResponse = InvoiceRecord;
+
+export interface InvoiceDetailsResponse {
+  invoice: InvoiceRecord;
+  elections: Array<{ symbol: string; mint: string; basisPoints: number }>;
+}
+
+export interface InvoiceListResponse {
+  invoices: InvoiceRecord[];
+  count: number;
 }
 
 // ── X (Twitter) Account Binding ───────────────────────────────────────────
