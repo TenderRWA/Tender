@@ -7,8 +7,10 @@ interface XAuthGateProps {
 }
 
 export default function XAuthGate({ wallet }: XAuthGateProps) {
-  const { disconnect } = useWallet();
+  const { disconnect, signMessage } = useWallet();
+  const [isSigning, setIsSigning] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,20 +23,40 @@ export default function XAuthGate({ wallet }: XAuthGateProps) {
     }
   }, []);
 
-  const handleAuthorize = () => {
-    setIsRedirecting(true);
-    const apiBase =
-      import.meta.env.VITE_API_URL ||
-      import.meta.env.TENDER_API_URL ||
-      "https://api.tenderrwa.com";
+  const handleAuthorize = async () => {
+    setSignError(null);
+    setIsSigning(true);
 
-    // Clean current URL without previous query params for clean return
-    const currentUrl = window.location.origin + window.location.pathname;
-    const loginUrl = `${apiBase}/api/v1/auth/x/login?wallet=${encodeURIComponent(
-      wallet
-    )}&return_url=${encodeURIComponent(currentUrl)}`;
+    try {
+      const timestamp = Date.now();
+      const nonce = Math.random().toString(36).substring(2, 10);
+      const message = `Sign to authenticate wallet ownership with TENDER and bind your 𝕏 (@Twitter) identity.\n\nWallet: ${wallet}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
 
-    window.location.href = loginUrl;
+      // Prompt wallet to sign message proving ownership
+      const signature = await signMessage(message);
+
+      setIsSigning(false);
+      setIsRedirecting(true);
+
+      const apiBase =
+        import.meta.env.VITE_API_URL ||
+        import.meta.env.TENDER_API_URL ||
+        "https://api.tenderrwa.com";
+
+      const currentUrl = window.location.origin + window.location.pathname;
+      const loginUrl = `${apiBase}/api/v1/auth/x/login?wallet=${encodeURIComponent(
+        wallet
+      )}&signature=${encodeURIComponent(signature)}&message=${encodeURIComponent(
+        message
+      )}&return_url=${encodeURIComponent(currentUrl)}`;
+
+      window.location.href = loginUrl;
+    } catch (err: any) {
+      setIsSigning(false);
+      setIsRedirecting(false);
+      console.warn("Wallet message signing error:", err);
+      setSignError(err?.message || "Signature was rejected in your wallet. Please sign to proceed.");
+    }
   };
 
   const shortWallet = `${wallet.slice(0, 4)}...${wallet.slice(-4)}`;
@@ -73,12 +95,12 @@ export default function XAuthGate({ wallet }: XAuthGateProps) {
           </p>
         </div>
 
-        {/* Error notice if redirected back with error */}
-        {urlError && (
+        {/* Error notice if signature fails or redirected back with error */}
+        {(signError || urlError) && (
           <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red/10 border border-red/20 text-left text-xs text-red">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
-              <span className="font-semibold">Authorization failed:</span> {urlError}. Please try again.
+              <span className="font-semibold">Verification failed:</span> {signError || urlError}.
             </div>
           </div>
         )}
@@ -104,10 +126,10 @@ export default function XAuthGate({ wallet }: XAuthGateProps) {
           <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
             <div className="flex items-center gap-1.5 text-xs font-medium text-white">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Anti-Sybil Handle Claim</span>
+              <span>Cryptographic Proof</span>
             </div>
             <p className="text-[11px] text-muted2 leading-normal">
-              Guarantees genuine ownership of your TENDER handles and preserves platform reputation.
+              You sign an on-chain proof of ownership. Nobody can spoof or claim your address without your key.
             </p>
           </div>
         </div>
@@ -116,15 +138,23 @@ export default function XAuthGate({ wallet }: XAuthGateProps) {
         <div className="pt-3 space-y-3">
           <button
             onClick={handleAuthorize}
-            disabled={isRedirecting}
-            className="w-full h-12 rounded-xl bg-white hover:bg-neutral-200 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-white/10 disabled:opacity-50"
+            disabled={isSigning || isRedirecting}
+            className="w-full h-12 rounded-xl bg-white hover:bg-neutral-200 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-white/10 disabled:opacity-60"
           >
-            {isRedirecting ? (
-              <span>Redirecting to 𝕏...</span>
+            {isSigning ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                <span>1. Sign message in your wallet...</span>
+              </span>
+            ) : isRedirecting ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                <span>2. Redirecting to 𝕏...</span>
+              </span>
             ) : (
               <>
                 <span className="text-base font-black">𝕏</span>
-                <span>Authorize with 𝕏 (Twitter)</span>
+                <span>Sign & Authorize with 𝕏 (Twitter)</span>
                 <ArrowRight className="w-4 h-4 ml-1" />
               </>
             )}
