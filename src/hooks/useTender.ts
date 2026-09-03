@@ -18,6 +18,7 @@ import {
   getXAccount,
   getPendingSettlements,
   confirmPendingSettlement,
+  dismissPendingSettlement,
   registerHandle,
   updateElections,
 } from "@/lib/tender-server-fns";
@@ -399,6 +400,16 @@ export function useConfirmPendingSettlement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
       queryClient.invalidateQueries({ queryKey: ["tender", "settlement-history"] });
+    },
+  });
+}
+
+export function useDismissPendingSettlement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string }) => dismissPendingSettlement({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
     },
   });
 }

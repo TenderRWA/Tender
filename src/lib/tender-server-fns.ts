@@ -423,3 +423,18 @@ export const confirmPendingSettlement = createServerFn({ method: "POST" })
       ),
     ),
   );
+
+export const dismissPendingSettlement = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      id: z.string().trim().min(1),
+    }),
+  )
+  .handler(({ data }): Promise<{ success: boolean }> =>
+    proxy(() =>
+      tenderFetch<{ success: boolean }>(
+        `/api/v1/bot/pending/${encodeURIComponent(data.id)}/dismiss`,
+        { method: "POST" },
+      ),
+    ),
+  );

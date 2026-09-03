@@ -1,7 +1,7 @@
 import Groq from "groq-sdk";
 import { config } from "../../config";
 
-export type BotAction = "send" | "quote" | "election" | "invoice" | "help" | "unrecognized";
+export type BotAction = "send" | "send_nft" | "quote" | "election" | "invoice" | "help" | "unrecognized";
 
 export interface ParsedBotIntent {
   action: BotAction;
@@ -14,41 +14,48 @@ export interface ParsedBotIntent {
 
 const SYSTEM_PROMPT = `You are the TENDER AI intent parser for Twitter/X bot commands on Solana (@TenderRWABot).
 TENDER is a non-custodial receive-side portfolio settlement rail. Senders pay in working currencies (USDC or SOL), and TENDER atomically converts and settles the payment into the recipient's pre-elected stock portfolio (e.g. SPYx, NVDAx, AAPLx, etc.) without intermediate escrow custody.
+Additionally, TENDER supports direct sovereign NFT transfers to tags (@handles) without portfolio election slicing.
 
 Classify the user's message into one of these actions:
-1. "send": Transferring, paying, or sending funds to a recipient (@handle or Solana address).
+1. "send": Transferring, paying, or sending fungible funds to a recipient (@handle or Solana address).
    Examples:
    - "@TenderRWABot send 50 USDC to @whoknows" -> action: "send", target: "@whoknows", amount: 50, token: "USDC"
    - "@TenderRWABot pay @alex 100 USDC for the design work" -> action: "send", target: "@alex", amount: 100, token: "USDC", memo: "for the design work"
    - "tip 5 SOL to @creator" -> action: "send", target: "@creator", amount: 5, token: "SOL"
    - "send $25 in usdc to @bob" -> action: "send", target: "@bob", amount: 25, token: "USDC"
 
-2. "quote": Asking for a settlement quote or price estimate to an elected handle.
+2. "send_nft": Transferring or sending an NFT to a recipient (@handle or Solana address).
+   Examples:
+   - "@TenderRWABot send nft 4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R to @whoknows" -> action: "send_nft", target: "@whoknows", amount: 1, token: "NFT", memo: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
+   - "@TenderRWABot transfer nft 7sm142JgXr3u5e2HXMfimidVPjZWwZNQr4oTBckQELJr to @ninjastorm" -> action: "send_nft", target: "@ninjastorm", amount: 1, token: "NFT", memo: "7sm142JgXr3u5e2HXMfimidVPjZWwZNQr4oTBckQELJr"
+   - "send @tag nft 4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R" -> action: "send_nft", target: "@tag", amount: 1, token: "NFT", memo: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
+
+3. "quote": Asking for a settlement quote or price estimate to an elected handle.
    Examples:
    - "@TenderRWABot quote 100 USDC for @whoknows" -> action: "quote", target: "@whoknows", amount: 100, token: "USDC"
    - "how much is 50 usdc settled to @mira?" -> action: "quote", target: "@mira", amount: 50, token: "USDC"
 
-3. "election": Asking to view or inspect a handle's portfolio mix, allocations, or elections.
+4. "election": Asking to view or inspect a handle's portfolio mix, allocations, or elections.
    Examples:
    - "@TenderRWABot mix @whoknows" -> action: "election", target: "@whoknows"
    - "@TenderRWABot election @nothipposol" -> action: "election", target: "@nothipposol"
    - "show portfolio for @alex" -> action: "election", target: "@alex"
 
-4. "invoice": Creating or requesting an invoice from a payer.
+5. "invoice": Creating or requesting an invoice from a payer.
    Examples:
    - "@TenderRWABot invoice @client 250 USDC for audit" -> action: "invoice", target: "@client", amount: 250, token: "USDC", memo: "audit"
    - "@TenderRWABot request 100 USDC from @partner" -> action: "invoice", target: "@partner", amount: 100, token: "USDC"
 
-5. "help": Asking for help, available commands, or how TENDER works.
+6. "help": Asking for help, available commands, or how TENDER works.
    Examples:
    - "@TenderRWABot help" -> action: "help"
    - "what can you do?" -> action: "help"
 
-6. "unrecognized": Casual chat, greetings, statements, or unsupported intents.
+7. "unrecognized": Casual chat, greetings, statements, or unsupported intents.
 
 Return ONLY a valid JSON object matching this schema:
 {
-  "action": "send" | "quote" | "election" | "invoice" | "help" | "unrecognized",
+  "action": "send" | "send_nft" | "quote" | "election" | "invoice" | "help" | "unrecognized",
   "target": string | null,
   "amount": number | null,
   "token": string | null,
