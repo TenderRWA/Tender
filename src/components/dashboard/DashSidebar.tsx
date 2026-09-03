@@ -1,4 +1,6 @@
 import { NavLink } from "@/lib/router-compat";
+import { useWallet } from "@/lib/wallet/wallet-context";
+import { useXAccount } from "@/hooks/useTender";
 
 /**
  * `Claim` is the odd one out: the others operate on a handle you already own,
@@ -34,6 +36,9 @@ const itemCls = ({ isActive }: { isActive: boolean }) =>
  * under the navbar. Mobile: a horizontal tab strip.
  */
 export default function DashSidebar() {
+  const { address } = useWallet();
+  const { data: xData } = useXAccount(address);
+
   return (
     <>
       <nav
@@ -49,6 +54,23 @@ export default function DashSidebar() {
             </li>
           ))}
         </ul>
+
+        {xData?.account && (
+          <div className="mt-3 p-3 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center gap-2.5 shadow-sm">
+            <div className="w-7 h-7 rounded-lg bg-black/50 border border-white/10 flex items-center justify-center font-bold text-xs text-white">
+              𝕏
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-white truncate">
+                @{xData.account.xUsername}
+              </div>
+              <div className="text-[10px] text-emerald-400 flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                Verified Identity
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       <nav

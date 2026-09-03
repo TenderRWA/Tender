@@ -7,6 +7,7 @@ export const config = {
   port: parseInt(process.env.PORT || "3001", 10),
   databaseUrl: process.env.DATABASE_URL || "",
   solanaRpcUrl: process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
+  frontendUrl: process.env.FRONTEND_URL || "https://tenderrwa.com",
   
   jupiter: {
     apiKey: process.env.JUPITER_API_KEY || "",

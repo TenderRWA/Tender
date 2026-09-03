@@ -54,13 +54,37 @@ export async function routeBotIntent(params: {
     };
   }
 
-  // 3. Lookup handle in registry
+  // 3. Lookup handle in registry (by handle name or by linked X username)
+  let recipientHandle = cleanHandle;
+  let recipientWallet = "";
+
   const handleRes = await query(
-    "SELECT handle, owner_wallet FROM handles WHERE handle = $1",
+    "SELECT handle, owner_wallet FROM handles WHERE handle = $1 OR LOWER(x_username) = $1 LIMIT 1",
     [cleanHandle]
   );
 
-  if (!handleRes.rows || handleRes.rows.length === 0) {
+  if (handleRes.rows && handleRes.rows.length > 0) {
+    recipientHandle = handleRes.rows[0].handle;
+    recipientWallet = handleRes.rows[0].owner_wallet;
+  } else {
+    // Check x_accounts directly
+    const xAccRes = await query(
+      "SELECT wallet_address, x_username FROM x_accounts WHERE LOWER(x_username) = $1 LIMIT 1",
+      [cleanHandle]
+    );
+    if (xAccRes.rows && xAccRes.rows.length > 0) {
+      recipientWallet = xAccRes.rows[0].wallet_address;
+      const wHandleRes = await query(
+        "SELECT handle FROM handles WHERE owner_wallet = $1 LIMIT 1",
+        [recipientWallet]
+      );
+      if (wHandleRes.rows && wHandleRes.rows.length > 0) {
+        recipientHandle = wHandleRes.rows[0].handle;
+      }
+    }
+  }
+
+  if (!recipientWallet) {
     return {
       replyText: `@${cleanHandle} hasn't registered a portfolio election on TENDER yet. Tap the link in my bio to claim this handle and choose your stock mix.`,
       recipientHandle: cleanHandle,
@@ -68,8 +92,6 @@ export async function routeBotIntent(params: {
       isRegistered: false,
     };
   }
-
-  const recipientWallet = handleRes.rows[0].owner_wallet;
 
   // 4. Lookup active elections
   const electionsRes = await query(

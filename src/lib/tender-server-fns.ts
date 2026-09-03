@@ -27,6 +27,7 @@ import type {
   SettlementHistoryResponse,
   SolanaTokenInfo,
   UpdateElectionsResponse,
+  XAccountResponse,
 } from "@/types/tender";
 
 import { TenderApiError, tenderFetch } from "@/server/tender-api";
@@ -299,4 +300,20 @@ export const createInvoice = createServerFn({ method: "POST" })
   )
   .handler(({ data }): Promise<InvoiceResponse> =>
     proxy(() => tenderFetch<InvoiceResponse>("/api/v1/invoices", { method: "POST", body: data })),
+  );
+
+// ── X (Twitter) Account ───────────────────────────────────────────────────
+
+export const getXAccount = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      wallet: z.string().trim().min(32, "wallet address required"),
+    }),
+  )
+  .handler(({ data }): Promise<XAccountResponse> =>
+    proxy(() =>
+      tenderFetch<XAccountResponse>("/api/v1/auth/x/account", {
+        query: { wallet: data.wallet },
+      }),
+    ),
   );

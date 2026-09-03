@@ -202,3 +202,18 @@ export interface InvoiceResponse {
   /** `solana:<api>/api/v1/solana-pay/<id>` — feed straight into a QR encoder. */
   payUrl: string;
 }
+
+// ── X (Twitter) Account Binding ───────────────────────────────────────────
+
+export interface XAccount {
+  walletAddress: string;
+  xUserId: string;
+  xUsername: string;
+  linkedAt: string;
+}
+
+export interface XAccountResponse {
+  linked: boolean;
+  account: XAccount | null;
+}
+
