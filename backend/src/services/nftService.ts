@@ -155,7 +155,7 @@ export async function buildNftTransferPlan(params: {
       }
     }
 
-    if (!targetWallet) {
+    if (!targetWallet && cleanHandle) {
       const FALLBACK_TAGS: Record<string, string> = {
         ninjastorm: "FuSZ9qKm5kUPdmsypSyMRXfTiY4dFrWyvWcmh2URwQWt",
         nothipposol: "2aCStNyta182cUEry72GNNP7R2CcyErGWA8DLQVjjw3D",
