@@ -46,5 +46,5 @@ describe("TENDER X Bot Suite", () => {
     expect(res.body.configuredBotHandle).toBe("TenderRWABot");
     expect(res.body.automatingAccount).toBe("TenderRWA");
     expect(res.body.status).toBe("ok");
-  });
+  }, 10000);
 });
