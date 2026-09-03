@@ -1,27 +1,39 @@
 import type { ReactNode } from "react";
 
 interface DashTableProps {
-  caption: string;
-  columns: string[];
+  caption?: string;
+  columns?: string[];
+  headers?: string[];
   children: ReactNode;
   minWidth?: string;
+  count?: number;
 }
 
 /** Card-wrapped table with mono caption; scrolls horizontally on small screens. */
-export default function DashTable({ caption, columns, children, minWidth = "min-w-[640px]" }: DashTableProps) {
+export default function DashTable({
+  caption,
+  columns,
+  headers,
+  children,
+  minWidth = "min-w-[640px]",
+}: DashTableProps) {
+  const cols = columns ?? headers ?? [];
+
   return (
     <div className="glass glass-interactive rounded-2xl min-w-0 overflow-hidden">
-      <div className="px-5 md:px-6 pt-5 md:pt-6 pb-4 border-b border-hairline/60">
-        <span className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
-          <span className="w-1.5 h-1.5 bg-red shrink-0" aria-hidden />
-          {caption}
-        </span>
-      </div>
+      {caption && (
+        <div className="px-5 md:px-6 pt-5 md:pt-6 pb-4 border-b border-hairline/60">
+          <span className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
+            <span className="w-1.5 h-1.5 bg-red shrink-0" aria-hidden />
+            {caption}
+          </span>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className={`w-full ${minWidth} text-left border-collapse`}>
           <thead>
             <tr className="border-b border-hairline/60">
-              {columns.map((c) => (
+              {cols.map((c) => (
                 <th
                   key={c}
                   scope="col"
