@@ -296,6 +296,7 @@ export const createInvoice = createServerFn({ method: "POST" })
       recipientHandle: handleSchema,
       amount: z.union([z.number().positive(), z.string().min(1)]),
       tokenMint: z.string().trim().min(32).optional(),
+      tokenSymbol: z.string().trim().optional(),
       memo: z.string().trim().optional(),
       expiryMinutes: z.number().int().positive().optional(),
       creatorWallet: z.string().trim().optional(),
