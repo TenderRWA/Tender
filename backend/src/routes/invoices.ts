@@ -17,6 +17,8 @@ export interface InvoiceRecord {
   status: "pending" | "paid" | "expired";
   signature?: string;
   payerWallet?: string;
+  creatorWallet?: string;
+  creatorHandle?: string;
   createdAt: string;
   expiresAt: string;
   paidAt?: string;
@@ -32,6 +34,8 @@ function mapInvoiceRow(row: any): InvoiceRecord {
     id: row.id,
     recipientHandle: row.recipient_handle,
     recipientWallet: row.recipient_wallet,
+    creatorWallet: row.creator_wallet || undefined,
+    creatorHandle: row.creator_handle || undefined,
     amount: String(row.amount),
     tokenMint: row.token_mint,
     tokenSymbol: row.token_symbol || "USDC",
@@ -57,6 +61,8 @@ invoicesRouter.post("/", async (req: Request, res: Response) => {
       tokenSymbol = "USDC",
       memo,
       expiryMinutes = 14 * 24 * 60, // Default 14 days
+      creatorWallet,
+      creatorHandle,
     } = req.body;
 
     if (!recipientHandle || amount == null || Number(amount) <= 0) {
@@ -65,6 +71,7 @@ invoicesRouter.post("/", async (req: Request, res: Response) => {
     }
 
     const cleanHandle = recipientHandle.toLowerCase().replace(/^@/, "").trim();
+    const cleanCreatorHandle = creatorHandle ? String(creatorHandle).toLowerCase().replace(/^@/, "").trim() : null;
 
     const handleResult = await query(
       "SELECT handle, owner_wallet FROM handles WHERE handle = $1",
@@ -82,8 +89,8 @@ invoicesRouter.post("/", async (req: Request, res: Response) => {
 
     const insertResult = await query(
       `INSERT INTO invoices (
-        id, recipient_handle, recipient_wallet, amount, token_mint, token_symbol, memo, status, expires_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
+        id, recipient_handle, recipient_wallet, amount, token_mint, token_symbol, memo, status, expires_at, creator_wallet, creator_handle
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10)
       RETURNING *`,
       [
         invoiceId,
@@ -94,6 +101,8 @@ invoicesRouter.post("/", async (req: Request, res: Response) => {
         tokenSymbol,
         memo || null,
         expiresAt,
+        creatorWallet || null,
+        cleanCreatorHandle || null,
       ]
     );
 
@@ -116,14 +125,22 @@ invoicesRouter.get("/", async (req: Request, res: Response) => {
     let sql = `SELECT * FROM invoices WHERE 1=1`;
     const params: any[] = [];
 
+    const orConditions: string[] = [];
     if (handle) {
       params.push(handle);
-      sql += ` AND recipient_handle = $${params.length}`;
+      orConditions.push(`recipient_handle = $${params.length}`);
+      orConditions.push(`creator_handle = $${params.length}`);
     }
 
     if (wallet) {
       params.push(wallet);
-      sql += ` AND (recipient_wallet = $${params.length} OR payer_wallet = $${params.length})`;
+      orConditions.push(`recipient_wallet = $${params.length}`);
+      orConditions.push(`creator_wallet = $${params.length}`);
+      orConditions.push(`payer_wallet = $${params.length}`);
+    }
+
+    if (orConditions.length > 0) {
+      sql += ` AND (${orConditions.join(" OR ")})`;
     }
 
     if (status) {
