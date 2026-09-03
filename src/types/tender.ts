@@ -238,3 +238,27 @@ export interface XAccountResponse {
   account: XAccount | null;
 }
 
+// ── Bot Pending Settlements ─────────────────────────────────────────────────
+
+export interface PendingSettlementRecord {
+  id: string;
+  sourceRef: string;
+  authorXId?: string;
+  authorXHandle?: string;
+  recipientHandle: string;
+  recipientWallet: string;
+  inputToken: string;
+  inputAmount: string;
+  portfolioSummary?: Array<{ symbol: string; percentage: number; allocatedAmount: string }>;
+  tweetUrl?: string;
+  status: "pending" | "completed" | "cancelled";
+  signature?: string;
+  settledAt?: string;
+  createdAt: string;
+}
+
+export interface PendingSettlementsResponse {
+  pendingSettlements: PendingSettlementRecord[];
+  count: number;
+}
+
