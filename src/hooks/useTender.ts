@@ -4,6 +4,7 @@ import { useWallet } from "@/lib/wallet/wallet-context";
 import {
   buildSettlementTx,
   checkHandle,
+  confirmInvoicePayment,
   confirmSettlement,
   createInvoice,
   getAsset,
@@ -11,6 +12,8 @@ import {
   getElectionQuote,
   getHandle,
   getHandlesByOwner,
+  getInvoice,
+  getInvoices,
   getSettlementHistory,
   getXAccount,
   registerHandle,
@@ -22,6 +25,9 @@ import type {
   ElectionQuoteResponse,
   HandleAvailability,
   HandleDetailsResponse,
+  InvoiceDetailsResponse,
+  InvoiceListResponse,
+  InvoiceResponse,
   OwnerHandlesResponse,
   PortfolioQuoteLeg,
   SettlementHistoryResponse,
@@ -272,6 +278,7 @@ export function useSettlementHistory(params: {
 // -- Invoices ---------------------------------------------------------------
 
 export function useCreateInvoice() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
       recipientHandle: string;
@@ -280,6 +287,51 @@ export function useCreateInvoice() {
       memo?: string;
       expiryMinutes?: number;
     }) => createInvoice({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tender", "invoices"] });
+    },
+  });
+}
+
+export function useInvoice(invoiceId: string | null | undefined) {
+  const cleanId = (invoiceId ?? "").trim();
+  return useQuery<InvoiceDetailsResponse>({
+    queryKey: ["tender", "invoice", cleanId],
+    queryFn: () => getInvoice({ data: { id: cleanId } }),
+    enabled: cleanId.length > 0,
+    staleTime: 10 * 1000,
+  });
+}
+
+export function useInvoices(params: { handle?: string | null; wallet?: string | null; status?: string } = {}) {
+  const cleanHandle = (params.handle ?? "").trim().replace(/^@/, "").toLowerCase();
+  const cleanWallet = (params.wallet ?? "").trim();
+
+  return useQuery<InvoiceListResponse>({
+    queryKey: ["tender", "invoices", cleanHandle, cleanWallet, params.status ?? "all"],
+    queryFn: () =>
+      getInvoices({
+        data: {
+          handle: cleanHandle || undefined,
+          wallet: cleanWallet || undefined,
+          status: params.status || undefined,
+        },
+      }),
+    enabled: cleanHandle.length > 0 || cleanWallet.length >= 32,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useConfirmInvoicePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; signature: string; payerWallet?: string }) =>
+      confirmInvoicePayment({ data: input }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tender", "invoice", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["tender", "invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["tender", "settlement-history"] });
+    },
   });
 }
 
