@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS invoices (
   status VARCHAR(20) NOT NULL DEFAULT 'pending',
   signature VARCHAR(128),
   payer_wallet VARCHAR(64),
+  creator_wallet VARCHAR(64),
+  creator_handle VARCHAR(32),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL,
   paid_at TIMESTAMPTZ
@@ -19,5 +21,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 
 CREATE INDEX IF NOT EXISTS idx_invoices_recipient_handle ON invoices(recipient_handle);
 CREATE INDEX IF NOT EXISTS idx_invoices_recipient_wallet ON invoices(recipient_wallet);
+CREATE INDEX IF NOT EXISTS idx_invoices_creator_wallet ON invoices(creator_wallet);
+CREATE INDEX IF NOT EXISTS idx_invoices_creator_handle ON invoices(creator_handle);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
 CREATE INDEX IF NOT EXISTS idx_invoices_expires_at ON invoices(expires_at);
