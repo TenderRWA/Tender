@@ -286,6 +286,8 @@ export function useCreateInvoice() {
       tokenMint?: string;
       memo?: string;
       expiryMinutes?: number;
+      creatorWallet?: string;
+      creatorHandle?: string;
     }) => createInvoice({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tender", "invoices"] });
