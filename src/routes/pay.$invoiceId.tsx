@@ -24,9 +24,8 @@ function InvoiceCheckoutPage() {
   const invoice = data?.invoice;
   const elections = data?.elections ?? [];
 
-  // Payer asset selection (USDC or SOL)
-  const [payToken, setPayToken] = useState<string>("USDC");
-  const { data: assetData } = useAssets({ featured: true });
+  // Payment token is strictly locked to the invoice's denomination (USDC or SOL)
+  const payToken = invoice?.tokenSymbol?.toUpperCase() === "SOL" ? "SOL" : "USDC";
 
   const inputMint = useMemo(() => {
     if (payToken === "SOL") {
@@ -271,26 +270,24 @@ function InvoiceCheckoutPage() {
                 </div>
               ) : (
                 <>
-                  {/* Pay With Token Selector */}
+                  {/* Fixed Required Payment Asset */}
                   <div className="space-y-2">
                     <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted2 block">
-                      Pay With
+                      Required Settlement Asset
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {["USDC", "SOL"].map((sym) => (
-                        <button
-                          key={sym}
-                          type="button"
-                          onClick={() => setPayToken(sym)}
-                          className={`py-2.5 px-3 rounded-xl font-mono text-xs font-semibold uppercase tracking-wider border transition-all ${
-                            payToken === sym
-                              ? "bg-red text-white border-red shadow-xs"
-                              : "glass-soft text-secondary2 border-hairline hover:text-foreground"
-                          }`}
-                        >
-                          {sym}
-                        </button>
-                      ))}
+                    <div className="p-3.5 rounded-xl bg-base/80 border border-hairline/80 flex items-center justify-between font-mono text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red" />
+                        <span className="font-semibold text-foreground text-sm">
+                          {payToken}
+                        </span>
+                        <span className="text-[11px] text-muted2">
+                          ({payToken === "SOL" ? "Native Solana" : "USD Coin"})
+                        </span>
+                      </div>
+                      <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-card2 border border-hairline text-secondary2 font-medium">
+                        Fixed Rail
+                      </span>
                     </div>
                   </div>
 
