@@ -126,6 +126,8 @@ botRouter.get("/pending", async (req: Request, res: Response) => {
     if (status && status !== "all") {
       params.push(status);
       queryText += ` AND status = $${params.length}`;
+    } else if (status !== "all") {
+      queryText += ` AND status != 'dismissed'`;
     }
 
     if (handle && typeof handle === "string") {
@@ -195,5 +197,30 @@ botRouter.post("/pending/:id/confirm", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[Bot Pending Confirm] Error:", err);
     res.status(500).json({ error: "Failed to confirm pending settlement", details: err.message });
+  }
+});
+
+// POST /api/v1/bot/pending/:id/dismiss - Mark pending settlement as dismissed to unclutter view
+botRouter.post("/pending/:id/dismiss", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await query(
+      `UPDATE pending_settlements
+       SET status = 'dismissed', updated_at = NOW()
+       WHERE id::text = $1::text OR source_ref = $1::text
+       RETURNING *`,
+      [id]
+    );
+
+    if (!result.rows || result.rows.length === 0) {
+      res.status(404).json({ error: "Pending settlement not found" });
+      return;
+    }
+
+    res.json({ success: true, settlement: result.rows[0], message: "Pending settlement dismissed" });
+  } catch (err: any) {
+    console.error("[Bot Pending Dismiss] Error:", err);
+    res.status(500).json({ error: "Failed to dismiss pending settlement", details: err.message });
   }
 });
