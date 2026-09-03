@@ -23,8 +23,10 @@ export interface NftMetadata {
  */
 export function isValidSolanaAddress(address: string): boolean {
   try {
-    const pk = new PublicKey(address.trim());
-    return PublicKey.isOnCurve(pk.toBuffer());
+    const clean = (address || "").trim();
+    if (clean.length < 32 || clean.length > 44) return false;
+    new PublicKey(clean);
+    return true;
   } catch {
     return false;
   }
