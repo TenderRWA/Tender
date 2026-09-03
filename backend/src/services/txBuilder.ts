@@ -199,6 +199,58 @@ export async function buildDirectTransferTx(params: {
   return { base64Transaction: serialized };
 }
 
+export async function buildAtomicRelaySwapTx(params: {
+  userWallet: string;
+  steps: any[];
+}): Promise<{ base64Transaction?: string }> {
+  const step = params.steps?.find((s: any) =>
+    s.items?.some((i: any) => i.data?.instructions)
+  );
+  const item = step?.items?.find((i: any) => i.data?.instructions);
+  const data = item?.data;
+
+  if (!data || !data.instructions || data.instructions.length === 0) {
+    return {};
+  }
+
+  const instructions = data.instructions.map((ix: any) => {
+    const isHex =
+      typeof ix.data === "string" &&
+      /^[0-9a-fA-F]*$/.test(ix.data) &&
+      ix.data.length % 2 === 0;
+    const dataBuffer = isHex
+      ? Buffer.from(ix.data, "hex")
+      : Buffer.from(ix.data, "base64");
+
+    return new TransactionInstruction({
+      programId: new PublicKey(ix.programId),
+      keys: ix.keys.map((k: any) => ({
+        pubkey: new PublicKey(k.pubkey),
+        isSigner: k.isSigner,
+        isWritable: k.isWritable,
+      })),
+      data: dataBuffer,
+    });
+  });
+
+  const addressLookupTableAccounts = await getAddressLookupTableAccounts(
+    data.addressLookupTableAddresses || []
+  );
+
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
+
+  const messageV0 = new TransactionMessage({
+    payerKey: new PublicKey(params.userWallet),
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message(addressLookupTableAccounts);
+
+  const transaction = new VersionedTransaction(messageV0);
+  const serialized = Buffer.from(transaction.serialize()).toString("base64");
+
+  return { base64Transaction: serialized };
+}
+
 export async function buildSettlementTxPlan(params: {
   userWallet: string;
   recipientWallet: string;
@@ -284,9 +336,16 @@ export async function buildSettlementTxPlan(params: {
       },
     };
   } else if (params.quote.winner === "relay" && params.quote.rawWinnerQuote.relayQuote) {
+    const relaySteps = params.quote.rawWinnerQuote.relayQuote.steps;
+    const { base64Transaction } = await buildAtomicRelaySwapTx({
+      userWallet: params.userWallet,
+      steps: relaySteps,
+    });
+
     return {
       provider: "relay",
-      relaySteps: params.quote.rawWinnerQuote.relayQuote.steps,
+      base64Transaction,
+      relaySteps,
       details: {
         inAmount: params.quote.inAmount,
         outAmount: params.quote.outAmount,
