@@ -5,6 +5,7 @@ import {
   USDG,
   ETH,
   resolveRobinhoodToken,
+  isValidEvmAddress,
 } from "../lib/robinhoodTokens";
 
 export const PROTOCOL_FEE_BPS = 15; // 0.15% protocol fee
