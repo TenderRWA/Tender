@@ -105,6 +105,7 @@ botRouter.get("/status", async (_req: Request, res: Response) => {
 
     res.json({
       status: "ok",
+      service: "TENDER X Bot",
       botEnabled: config.x.botEnabled,
       configuredBotHandle: config.x.botHandle,
       automatingAccount: config.x.mainHandle,
@@ -114,6 +115,7 @@ botRouter.get("/status", async (_req: Request, res: Response) => {
       authenticatedBotUser: botUser,
       authError,
       lastProcessedMentionId: cursor,
+      timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to get bot status", details: err.message });
@@ -152,7 +154,7 @@ botRouter.get("/pending", async (req: Request, res: Response) => {
       authorXHandle: row.author_x_handle,
       recipientHandle: row.recipient_handle,
       recipientWallet: row.recipient_wallet,
-      inputToken: row.input_token || "USDC",
+      inputToken: row.input_token || "USDG",
       inputAmount: String(row.input_amount),
       tokenMint: row.token_mint || undefined,
       assetType: row.asset_type || "token",
@@ -160,6 +162,8 @@ botRouter.get("/pending", async (req: Request, res: Response) => {
       tweetUrl: row.tweet_url,
       status: row.status,
       signature: row.signature,
+      chain: row.chain || "robinhood",
+      networkId: row.network_id || 4663,
       settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : undefined,
       createdAt: new Date(row.created_at).toISOString(),
     }));
