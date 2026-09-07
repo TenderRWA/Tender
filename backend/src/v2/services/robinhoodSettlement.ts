@@ -244,39 +244,10 @@ export async function quoteSingleSwap(params: SingleSwapQuoteParams): Promise<Si
     };
   }
 
-  // 2. Try Relay Cross-Currency Solver
-  try {
-    const relayQuote = await fetchRelayRobinhoodQuote({
-      user: params.userWallet,
-      originCurrency: params.fromToken.address,
-      destinationCurrency: params.toToken.address,
-      amount: inBaseUnits,
-      recipient,
-    });
-
-    const outAmount = relayQuote.details?.currencyOut?.amount || "0";
-    const outFormatted = relayQuote.details?.currencyOut?.amountFormatted || "0";
-    const priceImpact = parseFloat(relayQuote.details?.totalImpact?.percent || "0");
-
-    return {
-      fromToken: params.fromToken,
-      toToken: params.toToken,
-      amountIn: inBaseUnits,
-      amountInFormatted: params.amountIn.toString(),
-      amountOut: outAmount,
-      amountOutFormatted: outFormatted,
-      rate: relayQuote.details?.rate || (parseFloat(outFormatted) / params.amountIn).toFixed(6),
-      priceImpactPct: priceImpact,
-      timeEstimate: relayQuote.details?.timeEstimate || 2,
-      requestId: relayQuote.requestId,
-      executionVenue: "relay_solver",
-      steps: relayQuote.steps,
-      rawRelayQuote: relayQuote,
-    };
-  } catch (err) {
-    // 3. Fallback to native Uniswap V4 quoting on Robinhood Chain
-    return getSimulatedUniswapV4Quote(params.fromToken, params.toToken, params.amountIn, recipient);
-  }
+  // 2. Uniswap V4 Execution on Robinhood Chain (Chain 4663)
+  // Relay solvers only support ETH <-> USDG on 4663; all tokenized equities (SPCX, NVDA, AAPL, etc.)
+  // trade natively and exclusively through Uniswap V4 pools on Robinhood Chain.
+  return getSimulatedUniswapV4Quote(params.fromToken, params.toToken, params.amountIn, recipient);
 }
 
 /**
