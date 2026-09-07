@@ -88,6 +88,7 @@ app.use("/api/v2/assets", v2AssetsRouter);
 app.use("/api/v2/handles", v2HandlesRouter);
 app.use("/api/v2/settle", v2SettleRouter);
 app.use("/api/v2/invoices", v2InvoicesRouter);
+app.use("/api/v2/bot", botRouter);
 
 // Fallback 404 handler
 app.use((_req, res) => {
