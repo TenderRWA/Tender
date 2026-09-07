@@ -8,6 +8,10 @@ import { invoicesRouter } from "./routes/invoices";
 import { botRouter } from "./routes/bot";
 import { authRouter } from "./routes/auth";
 import { nftRouter } from "./routes/nft";
+import { v2AssetsRouter } from "./v2/routes/assets";
+import { v2HandlesRouter } from "./v2/routes/handles";
+import { v2SettleRouter } from "./v2/routes/settle";
+import { v2InvoicesRouter } from "./v2/routes/invoices";
 
 export const app = express();
 
@@ -69,7 +73,7 @@ app.use("/health", healthRouter);
 app.use("/api/health", healthRouter);
 app.use("/api/v1/health", healthRouter);
 
-// API v1 routes
+// API v1 routes (Solana Rail)
 app.use("/api/v1/assets", assetsRouter);
 app.use("/api/v1/handles", handlesRouter);
 app.use("/api/v1/settle", settleRouter);
@@ -78,6 +82,12 @@ app.use("/api/v1/solana-pay", invoicesRouter);
 app.use("/api/v1/bot", botRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/nft", nftRouter);
+
+// API v2 routes (Robinhood Chain Rail - Chain ID 4663)
+app.use("/api/v2/assets", v2AssetsRouter);
+app.use("/api/v2/handles", v2HandlesRouter);
+app.use("/api/v2/settle", v2SettleRouter);
+app.use("/api/v2/invoices", v2InvoicesRouter);
 
 // Fallback 404 handler
 app.use((_req, res) => {
