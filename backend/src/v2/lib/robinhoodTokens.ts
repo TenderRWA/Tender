@@ -106,7 +106,7 @@ export const FEATURED_ROBINHOOD_ASSETS: RobinhoodTokenInfo[] = [
     symbol: "MSFT",
     name: "Microsoft Corp. Token",
     underlyingTicker: "MSFT",
-    address: "0xd841261eaF44e99f0607d0f97127e462f4838EbC",
+    address: "0xe93237C50D904957Cf27E7B1133b510C669c2e74",
     decimals: 18,
     iconUrl: "https://cryptologos.cc/logos/microsoft-logo.png",
     assetType: "equity",
@@ -115,7 +115,7 @@ export const FEATURED_ROBINHOOD_ASSETS: RobinhoodTokenInfo[] = [
     symbol: "META",
     name: "Meta Platforms Inc. Token",
     underlyingTicker: "META",
-    address: "0x16Fec201b173323cf14a132B030113c2c199d79a",
+    address: "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35",
     decimals: 18,
     iconUrl: "https://cryptologos.cc/logos/meta-logo.png",
     assetType: "equity",
@@ -124,9 +124,9 @@ export const FEATURED_ROBINHOOD_ASSETS: RobinhoodTokenInfo[] = [
     symbol: "COIN",
     name: "Coinbase Global Inc. Token",
     underlyingTicker: "COIN",
-    address: "0x9cEa4Beb806A33e144aEfe51b14C04c272A7a435",
+    address: "0x6330D8C3178a418788dF01a47479c0ce7CCF450b",
     decimals: 18,
-    iconUrl: "https://cryptologos.cc/logos/coinbase-coin-logo.png",
+    iconUrl: "https://cryptologos.cc/logos/coinbase-logo.png",
     assetType: "equity",
   },
   {
@@ -146,6 +146,21 @@ export const ALL_ROBINHOOD_TOKENS: RobinhoodTokenInfo[] = [
   USDG,
   ...FEATURED_ROBINHOOD_ASSETS,
 ];
+
+export const ALL_ROBINHOOD_ASSETS = ALL_ROBINHOOD_TOKENS;
+
+export const ALIASES: Record<string, string> = {
+  SPACEX: "SPCX",
+  AAPLR: "AAPL",
+  TSLAR: "TSLA",
+  NVDAR: "NVDA",
+  GOOGLR: "GOOGL",
+  AMZNR: "AMZN",
+  MSFTR: "MSFT",
+  METAR: "META",
+  COINR: "COIN",
+  USDC: "USDG",
+};
 
 export function getAllRobinhoodTokens(): RobinhoodTokenInfo[] {
   return ALL_ROBINHOOD_TOKENS;
@@ -168,19 +183,26 @@ export function resolveRobinhoodToken(query: string | undefined | null): Robinho
     );
   }
 
-  // 2. Exact symbol or underlying ticker match (case-insensitive)
-  const upper = clean.toUpperCase();
+  // 2. Check alias map first
+  const upperRaw = clean.toUpperCase();
+  const aliased = ALIASES[upperRaw] || upperRaw;
+
+  // 3. Exact symbol or underlying ticker match (case-insensitive)
   const direct = ALL_ROBINHOOD_TOKENS.find(
-    (t) => t.symbol.toUpperCase() === upper || (t.underlyingTicker && t.underlyingTicker.toUpperCase() === upper)
+    (t) =>
+      t.symbol.toUpperCase() === aliased ||
+      (t.underlyingTicker && t.underlyingTicker.toUpperCase() === aliased)
   );
   if (direct) return direct;
 
-  // 3. Name or substring match
+  // 4. Name or substring match
   const lower = clean.toLowerCase();
   return ALL_ROBINHOOD_TOKENS.find(
     (t) => t.name.toLowerCase().includes(lower) || t.symbol.toLowerCase() === lower
   );
 }
+
+export const resolveV2Token = resolveRobinhoodToken;
 
 export function parseTokenUnits(amount: number | string, decimals: number): string {
   const str = typeof amount === "number" ? amount.toString() : amount;
