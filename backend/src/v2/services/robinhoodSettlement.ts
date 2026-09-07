@@ -1,4 +1,4 @@
-import { encodeFunctionData, erc20Abi, parseUnits } from "viem";
+import { encodeFunctionData, erc20Abi, parseUnits, getAddress } from "viem";
 import {
   ROBINHOOD_CHAIN_ID,
   RobinhoodTokenInfo,
@@ -181,7 +181,15 @@ function getSimulatedUniswapV4Quote(
  */
 export async function quoteSingleSwap(params: SingleSwapQuoteParams): Promise<SingleSwapQuoteResult> {
   const inBaseUnits = parseUnits(params.amountIn.toString(), params.fromToken.decimals).toString();
-  const recipient = (params.recipientWallet || params.userWallet) as `0x${string}`;
+  const rawRecipient = params.recipientWallet || params.userWallet || "0x0000000000000000000000000000000000000000";
+  let recipient: `0x${string}` = "0x0000000000000000000000000000000000000000";
+  try {
+    if (rawRecipient && isValidEvmAddress(rawRecipient)) {
+      recipient = getAddress(rawRecipient);
+    }
+  } catch {
+    recipient = "0x0000000000000000000000000000000000000000";
+  }
 
   // 1. Same-Asset Fast Path (zero conversion fee, instant 1:1 direct execution)
   if (params.fromToken.address.toLowerCase() === params.toToken.address.toLowerCase()) {
