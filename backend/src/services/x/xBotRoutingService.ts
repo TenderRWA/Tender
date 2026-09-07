@@ -69,7 +69,7 @@ export async function routeBotIntent(params: {
       .join(", ");
 
     return {
-      replyText: `@${handleDetails.handle}'s active receive-side portfolio: ${allocStr}. Settles atomically on Robinhood Chain via Uniswap V4 & Relay.`,
+      replyText: `@${handleDetails.handle}'s active receive-side portfolio: ${allocStr}. Settles atomically on Robinhood Chain via Uniswap V4.`,
       recipientHandle: handleDetails.handle,
       recipientWallet: handleDetails.ownerWallet,
       isRegistered: true,
@@ -264,7 +264,7 @@ export async function routeBotIntent(params: {
           },
         ];
 
-  // Calculate Robinhood portfolio quotes via Relay & Uniswap V4
+  // Calculate Robinhood portfolio quotes via Uniswap V4
   let portfolioResult;
   try {
     portfolioResult = await quotePortfolioSettlement({
@@ -296,7 +296,7 @@ export async function routeBotIntent(params: {
   // Handle quote command (read-only)
   if (intent.action === "quote") {
     return {
-      replyText: `Quote for @${recipientHandle}: ${intent.amount} ${inToken.symbol} allocates to: ${allocStr} on Robinhood Chain via Uniswap V4 & Relay. Tap the link in my bio to execute.`,
+      replyText: `Quote for @${recipientHandle}: ${intent.amount} ${inToken.symbol} allocates to: ${allocStr} on Robinhood Chain via Uniswap V4. Tap the link in my bio to execute.`,
       recipientHandle,
       recipientWallet,
       isRegistered: true,
