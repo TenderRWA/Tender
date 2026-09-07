@@ -39,7 +39,7 @@ export interface V2HandleDetails {
 const DEMO_V2_HANDLES: Record<string, V2HandleDetails> = {
   ninjastorm: {
     handle: "ninjastorm",
-    ownerWallet: "0x71C67ed3e80e5e453538096C91000570b74057A0",
+    ownerWallet: "0x1111111111111111111111111111111111111111",
     xHandle: "ninjastorm",
     metadata: {},
     elections: [
@@ -77,7 +77,7 @@ const DEMO_V2_HANDLES: Record<string, V2HandleDetails> = {
   },
   nothipposol: {
     handle: "nothipposol",
-    ownerWallet: "0x2aCStNyta182cUEry72GNNP7R2CcyErGWA8DLQVjjw",
+    ownerWallet: "0x2222222222222222222222222222222222222222",
     xHandle: "nothipposol",
     metadata: {},
     elections: [
