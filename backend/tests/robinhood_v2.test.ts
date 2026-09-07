@@ -266,3 +266,101 @@ describe("Robinhood Chain V2 - 𝕏 Bot Integration", () => {
     expect(routing.portfolioSummary!.length).toBeGreaterThan(0);
   });
 });
+
+describe("Robinhood Chain V2 - NFT Rail", () => {
+  it("GET /api/v2/nft/resolve-target/:target resolves registered handle", async () => {
+    const res = await request.get("/api/v2/nft/resolve-target/ninjastorm");
+    expect(res.status).toBe(200);
+    expect(res.body.resolved).toBe(true);
+    expect(res.body.isHandle).toBe(true);
+    expect(res.body.handle).toBe("@ninjastorm");
+    expect(isValidEvmAddress(res.body.walletAddress)).toBe(true);
+    expect(res.body.networkId).toBe(ROBINHOOD_CHAIN_ID);
+  });
+
+  it("GET /api/v2/nft/resolve-target/:target resolves raw EVM address", async () => {
+    const rawWallet = "0x2222222222222222222222222222222222222222";
+    const res = await request.get(`/api/v2/nft/resolve-target/${rawWallet}`);
+    expect(res.status).toBe(200);
+    expect(res.body.resolved).toBe(true);
+    expect(res.body.isHandle).toBe(false);
+    expect(res.body.walletAddress.toLowerCase()).toBe(rawWallet.toLowerCase());
+    expect(res.body.networkId).toBe(ROBINHOOD_CHAIN_ID);
+  });
+
+  it("GET /api/v2/nft/resolve-target/:target returns 404 for unknown handle", async () => {
+    const res = await request.get("/api/v2/nft/resolve-target/unknown_ghost_rh_user_9999");
+    expect(res.status).toBe(404);
+    expect(res.body.resolved).toBe(false);
+    expect(res.body.error).toContain("is not registered");
+  });
+
+  it("POST /api/v2/nft/transfer-plan validates required parameters", async () => {
+    const invalidWalletRes = await request.post("/api/v2/nft/transfer-plan").send({
+      fromWallet: "invalid-wallet",
+      target: "@ninjastorm",
+      contractAddress: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa",
+      tokenId: 1,
+    });
+    expect(invalidWalletRes.status).toBe(400);
+
+    const invalidContractRes = await request.post("/api/v2/nft/transfer-plan").send({
+      fromWallet: "0x1111111111111111111111111111111111111111",
+      target: "@ninjastorm",
+      contractAddress: "invalid-contract",
+      tokenId: 1,
+    });
+    expect(invalidContractRes.status).toBe(400);
+
+    const missingTokenIdRes = await request.post("/api/v2/nft/transfer-plan").send({
+      fromWallet: "0x1111111111111111111111111111111111111111",
+      target: "@ninjastorm",
+      contractAddress: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa",
+    });
+    expect(missingTokenIdRes.status).toBe(400);
+  });
+
+  it("POST /api/v2/nft/transfer-plan generates valid safeTransferFrom calldata for tag target", async () => {
+    const sender = "0x9999999999999999999999999999999999999999";
+    const nftContract = "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa";
+    const res = await request.post("/api/v2/nft/transfer-plan").send({
+      fromWallet: sender,
+      target: "@ninjastorm",
+      contractAddress: nftContract,
+      tokenId: 101,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.networkId).toBe(ROBINHOOD_CHAIN_ID);
+    expect(res.body.sender.walletAddress.toLowerCase()).toBe(sender.toLowerCase());
+    expect(res.body.recipient.handle).toBe("@ninjastorm");
+    expect(isValidEvmAddress(res.body.recipient.walletAddress)).toBe(true);
+
+    // Transaction verification
+    expect(res.body.transaction.to.toLowerCase()).toBe(nftContract.toLowerCase());
+    expect(res.body.transaction.chainId).toBe(ROBINHOOD_CHAIN_ID);
+    expect(res.body.transaction.value).toBe("0");
+    // safeTransferFrom(address,address,uint256) selector is 0x42842e0e
+    expect(res.body.transaction.data.startsWith("0x42842e0e")).toBe(true);
+  });
+
+  it("POST /api/v2/nft/transfer-plan generates valid safeTransferFrom calldata for raw EVM wallet target", async () => {
+    const sender = "0x1111111111111111111111111111111111111111";
+    const recipient = "0x3333333333333333333333333333333333333333";
+    const nftContract = "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa";
+    const res = await request.post("/api/v2/nft/transfer-plan").send({
+      fromWallet: sender,
+      target: recipient,
+      contractAddress: nftContract,
+      tokenId: 404,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.recipient.handle).toBeNull();
+    expect(res.body.recipient.walletAddress.toLowerCase()).toBe(recipient.toLowerCase());
+    expect(res.body.transaction.data.startsWith("0x42842e0e")).toBe(true);
+  });
+});
+
