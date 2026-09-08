@@ -264,6 +264,37 @@ export function settlementFromV1(item: SettlementHistoryItem): RailSettlementRec
   };
 }
 
+export function settlementFromV2(item: {
+  id: string;
+  txHash?: string;
+  senderWallet: string;
+  recipientHandle?: string;
+  recipientWallet: string;
+  inputTokenSymbol: string;
+  inputTokenAddress: string;
+  inputAmount: string;
+  outputBreakdown: { symbol: string; amount: string; address?: string; tokenAddress?: string }[];
+  status: string;
+  createdAt: string;
+}): RailSettlementRecord {
+  return {
+    id: String(item.id),
+    txId: item.txHash,
+    senderWallet: item.senderWallet,
+    recipientHandle: item.recipientHandle,
+    recipientWallet: item.recipientWallet,
+    inputAddress: item.inputTokenAddress || item.inputTokenSymbol,
+    inputAmount: item.inputAmount,
+    outputBreakdown: (item.outputBreakdown ?? []).map((o) => ({
+      symbol: o.symbol,
+      amount: o.amount,
+      address: o.address || o.tokenAddress,
+    })),
+    status: item.status,
+    createdAt: item.createdAt,
+  };
+}
+
 // ── Invoices ────────────────────────────────────────────────────────────────
 
 export function invoiceFromV1(inv: InvoiceRecord): RailInvoice {

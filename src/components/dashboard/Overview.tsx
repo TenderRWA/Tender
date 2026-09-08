@@ -37,7 +37,9 @@ export default function Overview() {
   const fullyAllocated = data?.totalBasisPoints === 10_000;
   // The API keys writes on handle + owner wallet, so a mismatch means this
   // session can read the handle but every write will be rejected.
-  const isOwner = Boolean(data && wallet && data.ownerWallet === wallet);
+  const isOwner = Boolean(
+    data && wallet && data.ownerWallet.toLowerCase() === wallet.toLowerCase()
+  );
 
   return (
     <ModulePage

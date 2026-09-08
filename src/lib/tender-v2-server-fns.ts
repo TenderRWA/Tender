@@ -204,6 +204,16 @@ export const updateElectionsV2 = createServerFn({ method: "POST" })
     ),
   );
 
+export const getHandlesByOwnerV2 = createServerFn({ method: "GET" })
+  .validator(z.object({ wallet: evmAddressSchema }))
+  .handler(({ data }): Promise<{ wallet: string; handles: string[]; count: number }> =>
+    proxy(() =>
+      tenderFetch<{ wallet: string; handles: string[]; count: number }>(
+        `/api/v2/handles/owner/${encodeURIComponent(data.wallet)}`,
+      ),
+    ),
+  );
+
 // -- Quoting & settlement ---------------------------------------------------
 
 export const getSettleQuoteV2 = createServerFn({ method: "POST" })
@@ -270,6 +280,48 @@ export const confirmSettlementV2 = createServerFn({ method: "POST" })
     ),
   );
 
+export interface V2SettlementItem {
+  id: string;
+  requestId?: string;
+  txHash?: string;
+  senderWallet: string;
+  recipientHandle?: string;
+  recipientWallet: string;
+  inputTokenSymbol: string;
+  inputTokenAddress: string;
+  inputAmount: string;
+  outputBreakdown: { symbol: string; amount: string; address?: string; tokenAddress?: string }[];
+  status: string;
+  feeCollectedUsd: number;
+  createdAt: string;
+}
+
+export interface V2SettlementHistoryResponse {
+  settlements: V2SettlementItem[];
+  total: number;
+  networkId: number;
+}
+
+export const getSettlementHistoryV2 = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      wallet: z.string().trim().optional(),
+      handle: z.string().trim().optional(),
+      limit: z.number().int().positive().optional(),
+      offset: z.number().int().min(0).optional(),
+    }),
+  )
+  .handler(({ data }): Promise<V2SettlementHistoryResponse> => {
+    const params: Record<string, string | number> = {};
+    if (data.wallet) params.wallet = data.wallet;
+    if (data.handle) params.handle = data.handle;
+    if (data.limit) params.limit = data.limit;
+    if (data.offset) params.offset = data.offset;
+    return proxy(() =>
+      tenderFetch<V2SettlementHistoryResponse>("/api/v2/settle/history", { query: params }),
+    );
+  });
+
 // -- Invoices ---------------------------------------------------------------
 
 export const createInvoiceV2 = createServerFn({ method: "POST" })
@@ -295,6 +347,36 @@ export const createInvoiceV2 = createServerFn({ method: "POST" })
       return "invoice" in res ? res.invoice : res;
     }),
   );
+
+export interface V2InvoicesListResponse {
+  invoices: V2Invoice[];
+  total: number;
+  networkId: number;
+}
+
+export const getInvoicesV2 = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      handle: z.string().trim().optional(),
+      recipientWallet: z.string().trim().optional(),
+      creatorWallet: z.string().trim().optional(),
+      status: z.string().trim().optional(),
+      limit: z.number().int().positive().optional(),
+      offset: z.number().int().min(0).optional(),
+    }),
+  )
+  .handler(({ data }): Promise<V2InvoicesListResponse> => {
+    const params: Record<string, string | number> = {};
+    if (data.handle) params.handle = data.handle;
+    if (data.recipientWallet) params.recipientWallet = data.recipientWallet;
+    if (data.creatorWallet) params.creatorWallet = data.creatorWallet;
+    if (data.status) params.status = data.status;
+    if (data.limit) params.limit = data.limit;
+    if (data.offset) params.offset = data.offset;
+    return proxy(() =>
+      tenderFetch<V2InvoicesListResponse>("/api/v2/invoices", { query: params }),
+    );
+  });
 
 export const getInvoiceV2 = createServerFn({ method: "GET" })
   .validator(z.object({ id: z.string().trim().min(1) }))

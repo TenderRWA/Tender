@@ -86,6 +86,30 @@ function SolanaWalletRow({
  * asynchronously and connects per wallet; wagmi surfaces EIP-6963 providers as
  * connectors — so the list is built per rail rather than from one shared array.
  */
+const WALLET_CONNECT_ICON = "https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/Gradient/Icon.svg";
+const METAMASK_ICON = "https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg";
+const COINBASE_ICON = "https://assets.coingecko.com/markets/images/23/small/Coinbase_Coin_Primary.png";
+const PHANTOM_ICON = "https://phantom.app/favicon.ico";
+const RABBY_ICON = "https://rabby.io/assets/images/logo.svg";
+
+function getWalletIcon(name: string, fallback?: string): string | undefined {
+  if (fallback) return fallback;
+  const n = name.toLowerCase();
+  if (n.includes("walletconnect")) return WALLET_CONNECT_ICON;
+  if (n.includes("coinbase")) return COINBASE_ICON;
+  if (n.includes("metamask")) return METAMASK_ICON;
+  if (n.includes("phantom")) return PHANTOM_ICON;
+  if (n.includes("rabby")) return RABBY_ICON;
+  return undefined;
+}
+
+function getWalletStatus(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("walletconnect")) return "QR / Mobile";
+  if (n.includes("coinbase")) return "App & Ext";
+  return "Detected";
+}
+
 export default function WalletModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { rail, wallets, connect } = useWallet();
   const solana = useSolanaWallet();
@@ -114,7 +138,7 @@ export default function WalletModal({ open, onClose }: { open: boolean; onClose:
 
   const empty =
     rail === "robinhood"
-      ? "No EVM wallet detected. Install MetaMask, Rabby or Coinbase Wallet, then reload this page."
+      ? "No EVM wallet detected. Install MetaMask, Rabby or Coinbase Wallet, or scan with WalletConnect."
       : "No Solana wallet detected. Install Phantom, Solflare or Backpack, then reload this page.";
 
   const hasWallets = rail === "robinhood" ? wallets.length > 0 : solana.wallets.length > 0;
@@ -167,9 +191,9 @@ export default function WalletModal({ open, onClose }: { open: boolean; onClose:
                 ? wallets.map((wallet) => (
                     <RowShell
                       key={wallet.id}
-                      icon={wallet.icon}
+                      icon={getWalletIcon(wallet.name, wallet.icon)}
                       name={wallet.name}
-                      status="Detected"
+                      status={getWalletStatus(wallet.name)}
                       onClick={() => void connectEvm(wallet.id, wallet.name)}
                     />
                   ))

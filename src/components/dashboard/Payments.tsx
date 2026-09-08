@@ -30,7 +30,7 @@ function useDebounced<T>(value: T, delay = 400): T {
 }
 
 /** Formats technical API and DEX error strings into clean, user-friendly language. */
-function formatDisplayError(raw: string): string {
+function formatDisplayError(raw: string, isRobinhood = false): string {
   if (!raw) return "";
   const low = raw.toLowerCase();
 
@@ -38,11 +38,14 @@ function formatDisplayError(raw: string): string {
     low.includes("not tradable") ||
     low.includes("token_not_tradable") ||
     low.includes("no routes found") ||
-    low.includes("no_swap_routes_found")
+    low.includes("no_swap_routes_found") ||
+    low.includes("unsupported")
   ) {
     const symbolMatch = raw.match(/([A-Za-z0-9_]{2,10}x?)\b.*?(?:not tradable|no routes)/i);
     const token = symbolMatch ? symbolMatch[1] : "one of the elected assets";
-    return `${token} currently has no active liquidity on Solana DEX order books. Please update the handle's election to liquid assets (e.g. NVDAx, SPYx, USDC).`;
+    return isRobinhood
+      ? `${token} currently has no active Uniswap V4 pool route on Robinhood Chain.`
+      : `${token} currently has no active liquidity on Solana DEX order books. Please update the handle's election to liquid assets (e.g. NVDAx, SPYx, USDC).`;
   }
 
   if (low.includes("rate limit") || low.includes("429") || low.includes("too many requests")) {
@@ -50,7 +53,9 @@ function formatDisplayError(raw: string): string {
   }
 
   if (low.includes("insufficient") || low.includes("liquidity")) {
-    return "Insufficient market depth on Solana DEXes to settle this amount.";
+    return isRobinhood
+      ? "Insufficient pool depth on Robinhood Chain Uniswap V4 to settle this amount."
+      : "Insufficient market depth on Solana DEXes to settle this amount.";
   }
 
   if (low.includes("slippage")) {
@@ -61,8 +66,10 @@ function formatDisplayError(raw: string): string {
     return "Transaction was cancelled in your wallet.";
   }
 
-  if (low.includes("internal error") || low.includes("-32603")) {
-    return "Wallet transaction simulation failed. Please ensure your wallet has sufficient SOL for network rent fees.";
+  if (low.includes("internal error") || low.includes("-32603") || low.includes("insufficient funds")) {
+    return isRobinhood
+      ? "Wallet simulation failed. Ensure your wallet has sufficient ETH for Robinhood Chain gas fees."
+      : "Wallet transaction simulation failed. Please ensure your wallet has sufficient SOL for network rent fees.";
   }
 
   const clean = raw
@@ -70,6 +77,7 @@ function formatDisplayError(raw: string): string {
     .replace(/\b(?:400|404|500)\b/g, "")
     .replace(/Jupiter quote failed:?/gi, "")
     .replace(/Relay quote failed:?/gi, "")
+    .replace(/Uniswap V4.*?failed:?/gi, "")
     .replace(/Portfolio election quote failed:?/gi, "")
     .trim();
 
@@ -403,7 +411,7 @@ export default function Payments() {
           {settle.isError && (
             <div className="rounded-lg bg-red/10 border border-red/30 p-3.5">
               <p className="font-mono text-xs text-red font-medium">
-                {formatDisplayError(settle.error.message)}
+                {formatDisplayError(settle.error.message, profile.id === "robinhood")}
               </p>
             </div>
           )}
@@ -427,7 +435,7 @@ export default function Payments() {
                 Routing Notice
               </span>
               <p className="font-body text-xs text-foreground/90 leading-relaxed">
-                {formatDisplayError(quote.error.message)}
+                {formatDisplayError(quote.error.message, profile.id === "robinhood")}
               </p>
             </div>
           )}

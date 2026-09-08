@@ -45,7 +45,7 @@ function DashboardLayout() {
 
   const isWalletConnected = Boolean(address);
   const isXBound = Boolean((xData?.data?.linked ?? xData?.linked) && !xData?.isDemo);
-  const isGated = rail === "solana" ? isWalletConnected && !isXBound : false;
+  const isGated = isWalletConnected && !isXBound;
 
   return (
     <div className="dash-aurora">

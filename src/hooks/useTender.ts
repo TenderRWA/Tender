@@ -24,6 +24,7 @@ import {
   pendingFromV1,
   pendingFromV2,
   settlementFromV1,
+  settlementFromV2,
   tokenFromV1,
   tokenFromV2,
 } from "@/lib/rail-normalize";
@@ -63,9 +64,12 @@ import {
   getAssetsV2,
   getElectionQuoteV2,
   getHandleV2,
+  getHandlesByOwnerV2,
   getInvoiceV2,
+  getInvoicesV2,
   getNftMetadataV2,
   getPendingSettlementsV2,
+  getSettlementHistoryV2,
   registerHandleV2,
   updateElectionsV2,
 } from "@/lib/tender-v2-server-fns";
@@ -210,6 +214,10 @@ export function useOwnerHandles(wallet: string | null | undefined) {
     queryKey: ["tender", rail, "owner-handles", clean],
     queryFn: async () => {
       try {
+        if (rail === "robinhood") {
+          const res = await getHandlesByOwnerV2({ data: { wallet: clean } });
+          return { data: res?.handles ?? [], isDemo: false };
+        }
         const res = await getHandlesByOwner({ data: { wallet: clean } });
         return { data: res?.handles ?? [], isDemo: false };
       } catch {
@@ -606,7 +614,15 @@ export function useSettlementHistory(
     ],
     queryFn: async () => {
       if (rail === "robinhood") {
-        return { data: demoSettlementHistory(), isDemo: true, demoReason: DEMO_REASON };
+        const res = await getSettlementHistoryV2({
+          data: {
+            wallet: cleanWallet || undefined,
+            handle: cleanHandleStr || undefined,
+            limit: params.limit,
+            offset: params.offset,
+          },
+        });
+        return { data: (res.settlements ?? []).map(settlementFromV2), isDemo: false };
       }
       const res = await getSettlementHistory({
         data: {
@@ -731,10 +747,14 @@ export function useInvoices(
     queryKey: ["tender", rail, "invoices", cleanHandleStr, cleanWallet, params.status ?? "all"],
     queryFn: async () => {
       if (rail === "robinhood") {
-        const rows = demoInvoices().filter(
-          (i) => !params.status || i.status === params.status,
-        );
-        return { data: rows, isDemo: true, demoReason: DEMO_REASON };
+        const res = await getInvoicesV2({
+          data: {
+            handle: cleanHandleStr || undefined,
+            recipientWallet: cleanWallet || undefined,
+            status: params.status || undefined,
+          },
+        });
+        return { data: (res.invoices ?? []).map(invoiceFromV2), isDemo: false };
       }
       const res = await getInvoices({
         data: {
