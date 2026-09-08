@@ -40,11 +40,14 @@ botRouter.post("/parse-intent", async (req: Request, res: Response) => {
 // POST /api/v1/bot/route-intent — Route an intent into a simulated reply and portfolio breakdown
 botRouter.post("/route-intent", async (req: Request, res: Response) => {
   try {
-    const { text, target, amount, token } = req.body as {
+    const { text, target, amount, token, authorHandle, authorId, tweetId } = req.body as {
       text?: string;
       target?: string;
       amount?: number;
       token?: string;
+      authorHandle?: string;
+      authorId?: string;
+      tweetId?: string;
     };
 
     let intent = text ? parseFastCommand(text) : null;
@@ -63,7 +66,7 @@ botRouter.post("/route-intent", async (req: Request, res: Response) => {
       };
     }
 
-    const result = await routeBotIntent({ intent });
+    const result = await routeBotIntent({ intent, authorHandle, authorId, tweetId });
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to route intent", details: err.message });
