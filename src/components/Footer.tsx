@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Copy, Check } from "lucide-react";
 import { useLocation, useNavigate } from "@/lib/router-compat";
 import { scrollToHash } from "@/lib/lenis";
 import { useComingSoon } from "@/components/ComingSoonModal";
@@ -33,6 +35,13 @@ export default function Footer() {
   const location = useLocation();
   const navigate = useNavigate();
   const comingSoon = useComingSoon();
+  const [copiedCA, setCopiedCA] = useState(false);
+
+  const handleCopyCA = () => {
+    navigator.clipboard.writeText("0x4d72dc5884a56c7200b0e77ace904ed439262322");
+    setCopiedCA(true);
+    setTimeout(() => setCopiedCA(false), 2000);
+  };
 
   const go = (to: string) => {
     const hashIdx = to.indexOf("#");
@@ -59,6 +68,44 @@ export default function Footer() {
             <p className="font-body text-secondary2 text-[17px] leading-relaxed max-w-sm">
               Get paid in the assets you'd rather hold.
             </p>
+
+            {/* Contract Address Chip */}
+            <button
+              type="button"
+              onClick={handleCopyCA}
+              className="group mt-1 flex items-center gap-2 rounded-xl border border-hairline/80 bg-white/80 hover:bg-white px-3 py-1.5 font-mono text-xs text-ink shadow-2xs backdrop-blur-xs transition-all hover:border-red hover:shadow-xs cursor-pointer w-fit"
+              title="Click to copy Contract Address"
+            >
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red" />
+                </span>
+                <span className="text-[11px] font-bold text-red uppercase tracking-wider">
+                  CA:
+                </span>
+                <span className="font-medium text-ink select-all hidden sm:inline">
+                  0x4d72dc5884a56c7200b0e77ace904ed439262322
+                </span>
+                <span className="font-medium text-ink select-all sm:hidden">
+                  0x4d72...2322
+                </span>
+              </div>
+
+              <span className="flex items-center gap-1 text-[11px] text-secondary2 group-hover:text-red transition-colors pl-2 border-l border-hairline">
+                {copiedCA ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-emerald-600 font-semibold">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </span>
+            </button>
           </div>
 
           <nav aria-label="Footer">

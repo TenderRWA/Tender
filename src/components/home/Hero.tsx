@@ -1,5 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { Copy, Check } from "lucide-react";
 import { scrollToHash } from "@/lib/lenis";
 import { EvolveVisual } from "@/views/evolve-hero/evolve-visual";
 import { HeroCta } from "@/views/evolve-hero/hero-cta";
@@ -54,6 +55,13 @@ export default function Hero() {
   });
   const stageOpacity = useTransform(scrollYProgress, [0, 0.55], [1, 0]);
   const stageY = useTransform(scrollYProgress, [0, 0.55], ["0px", "-72px"]);
+
+  const [copied, setCopied] = useState(false);
+  const handleCopyCA = () => {
+    navigator.clipboard.writeText("0x4d72dc5884a56c7200b0e77ace904ed439262322");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <section
@@ -124,6 +132,49 @@ export default function Hero() {
         </span>
 
         <HeroCta label="Dashboard" href="/dashboard" />
+
+        {/* Contract Address Chip */}
+        <div
+          className="absolute top-[10.5rem] right-[2.5rem] z-20
+                     max-md:static max-md:order-2 max-md:mt-3 max-md:w-full"
+        >
+          <button
+            type="button"
+            onClick={handleCopyCA}
+            className="group flex items-center gap-2 rounded-xl border border-neutral-300/80 bg-white/85 px-3 py-1.5 font-mono text-xs text-neutral-700 shadow-xs backdrop-blur-md transition-all hover:border-red hover:bg-white hover:shadow-md cursor-pointer max-md:w-full max-md:justify-between"
+            title="Click to copy Contract Address"
+          >
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-red" />
+              </span>
+              <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                CA:
+              </span>
+              <span className="font-medium text-neutral-900 select-all hidden sm:inline">
+                0x4d72dc5884a56c7200b0e77ace904ed439262322
+              </span>
+              <span className="font-medium text-neutral-900 select-all sm:hidden">
+                0x4d72...2322
+              </span>
+            </div>
+
+            <span className="flex items-center gap-1 text-[11px] text-neutral-500 group-hover:text-red transition-colors pl-2 border-l border-neutral-200">
+              {copied ? (
+                <>
+                  <Check className="h-3 w-3 text-emerald-600" />
+                  <span className="text-emerald-600 font-semibold">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3" />
+                  <span>Copy</span>
+                </>
+              )}
+            </span>
+          </button>
+        </div>
 
         <h1
           id="hero-title"
