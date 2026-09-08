@@ -4,6 +4,8 @@
 .env.*.local
 backend/.env
 backend/.env.local
+ai/.env
+ai/.env.local
 
 # Dependencies
 node_modules/

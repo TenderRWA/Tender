@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --color-base: #ffffff;
+  --color-card2: #f4f4f5;
+  --color-raised: #ececee;
+  --color-hairline: #e3e3e6;
+
+  /* Brand red */
+  --color-red: #e8322a;
+  --color-red-hover: #d42a22;
+  --color-red-deep: #b3251e;
+
+  /* Ink + greys */
+  --color-ink: #101012;
+  --color-secondary2: #55555c;
+  --color-muted2: #9a9aa0;
+  --color-greyseries: #c9c9ce;
+  --color-success: #3ecf8e;
+  --color-warning: #f5a524;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+@layer base {
+  body {
+    background-color: #fafafa;
+    color: #101012;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* TENDER Aurora Background */
+.dash-aurora {
+  position: relative;
+  isolation: isolate;
+}
+
+.dash-aurora::before {
+  content: "";
+  position: absolute;
+  inset: -10% -5% auto -5%;
+  height: 600px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(36rem 24rem at 12% 0%, color-mix(in oklab, var(--color-red) 16%, transparent), transparent 70%),
+    radial-gradient(30rem 20rem at 88% 12%, color-mix(in oklab, var(--color-ink) 8%, transparent), transparent 72%),
+    radial-gradient(24rem 18rem at 50% 30%, color-mix(in oklab, var(--color-red) 7%, transparent), transparent 75%);
+  filter: blur(8px);
+  opacity: 0.85;
+}
+
+/* Glass styling matching TENDER terminal */
+.glass {
+  background: color-mix(in oklab, var(--color-base) 86%, transparent);
+  backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--color-ink) 10%, transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, var(--color-base) 80%, transparent) inset,
+    0 18px 40px -24px color-mix(in oklab, var(--color-ink) 30%, transparent);
+}
+
+.glass-soft {
+  background: color-mix(in oklab, var(--color-base) 72%, transparent);
+  backdrop-filter: blur(18px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--color-ink) 8%, transparent);
+}
+
+.glass-interactive {
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.glass-interactive:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--color-red) 35%, transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, var(--color-base) 85%, transparent) inset,
+    0 20px 40px -20px color-mix(in oklab, var(--color-red) 35%, transparent);
+}

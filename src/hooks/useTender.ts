@@ -945,6 +945,27 @@ export const isNftFeatureEnabled = (): boolean => {
 
 export const useIsNftEnabled = () => isNftFeatureEnabled();
 
+/**
+ * Feature flag: TenderAI Copilot.
+ * Gated behind VITE_TENDER_AI=true on the main terminal.
+ */
+export const isTenderAiFeatureEnabled = (): boolean => {
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    const v =
+      import.meta.env.VITE_TENDER_AI ??
+      import.meta.env.VITE_ENABLE_TENDER_AI ??
+      import.meta.env.ENABLE_TENDER_AI;
+    if (v === "true" || v === "1" || v === true) return true;
+  }
+  if (typeof process !== "undefined" && process.env) {
+    const p = process.env.VITE_TENDER_AI ?? process.env.VITE_ENABLE_TENDER_AI ?? process.env.ENABLE_TENDER_AI;
+    if (p === "true" || p === "1") return true;
+  }
+  return false;
+};
+
+export const useIsTenderAiEnabled = () => isTenderAiFeatureEnabled();
+
 /** A collectible reference: a mint on Solana, a contract plus token id on Robinhood. */
 export interface NftRef {
   address: string;

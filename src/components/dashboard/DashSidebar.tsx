@@ -1,7 +1,8 @@
 import { NavLink } from "@/lib/router-compat";
 import { useWallet } from "@/lib/wallet/wallet-context";
-import { useXAccount } from "@/hooks/useTender";
+import { useXAccount, useIsTenderAiEnabled } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
+import { Sparkles } from "lucide-react";
 
 /**
  * `Claim` is the odd one out: the others operate on a handle you already own,
@@ -44,6 +45,7 @@ export default function DashSidebar() {
 
   const isLinked = Boolean(xData?.data?.linked ?? xData?.linked);
   const verifiedAccount = isLinked && !xData?.isDemo ? (xData?.data?.account ?? xData?.account) : null;
+  const isTenderAiEnabled = useIsTenderAiEnabled();
 
   return (
     <>
@@ -59,6 +61,25 @@ export default function DashSidebar() {
               </NavLink>
             </li>
           ))}
+
+          {isTenderAiEnabled && (
+            <li className="mt-1 border-t border-hairline/70 pt-1">
+              <a
+                href="https://ai.tenderrwa.com"
+                target="_blank"
+                rel="noreferrer"
+                className="relative flex items-center justify-between rounded-lg px-3.5 py-2.5 font-body text-sm font-semibold text-red hover:bg-red/8 transition-colors duration-150"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-red shrink-0" />
+                  <span>TenderAI</span>
+                </div>
+                <span className="rounded bg-red/10 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-red">
+                  AI ↗
+                </span>
+              </a>
+            </li>
+          )}
         </ul>
 
         {verifiedAccount ? (
@@ -115,6 +136,19 @@ export default function DashSidebar() {
               </NavLink>
             </li>
           ))}
+          {isTenderAiEnabled && (
+            <li>
+              <a
+                href="https://ai.tenderrwa.com"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2.5 font-body text-sm font-semibold text-red hover:bg-red/8 transition-colors duration-150"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-red" />
+                <span>TenderAI ↗</span>
+              </a>
+            </li>
+          )}
         </ul>
       </nav>
 

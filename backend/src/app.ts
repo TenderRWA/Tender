@@ -13,6 +13,7 @@ import { v2HandlesRouter } from "./v2/routes/handles";
 import { v2SettleRouter } from "./v2/routes/settle";
 import { v2InvoicesRouter } from "./v2/routes/invoices";
 import { v2NftRouter } from "./v2/routes/nft";
+import { v2AiRouter } from "./v2/routes/ai";
 
 export const app = express();
 
@@ -91,6 +92,7 @@ app.use("/api/v2/settle", v2SettleRouter);
 app.use("/api/v2/invoices", v2InvoicesRouter);
 app.use("/api/v2/nft", v2NftRouter);
 app.use("/api/v2/bot", botRouter);
+app.use("/api/v2/ai", v2AiRouter);
 
 // Fallback 404 handler
 app.use((_req, res) => {
