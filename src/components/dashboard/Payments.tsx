@@ -303,7 +303,7 @@ export default function Payments() {
               setLog((prev) => [
                 {
                   symbol: res.nft.symbol || res.nft.name || "NFT",
-                  signature: res.signature,
+                  txId: res.txId || res.signature,
                   handle: res.handle,
                   at: now,
                 },
