@@ -102,9 +102,14 @@ export function useEvmWallet(): EvmWalletValue {
       if (account.chainId !== ROBINHOOD_CHAIN_ID) {
         await switchChainAsync({ chainId: ROBINHOOD_CHAIN_ID });
       }
+      const effectiveData =
+        tx.data && tx.data !== "0x" && tx.data !== "0x0"
+          ? (tx.data as `0x${string}`)
+          : undefined;
+
       return sendTransactionAsync({
         to: tx.to as `0x${string}`,
-        data: (tx.data || undefined) as `0x${string}` | undefined,
+        data: effectiveData,
         value: BigInt(tx.value || "0"),
         chainId: ROBINHOOD_CHAIN_ID,
       });

@@ -142,6 +142,26 @@ function getSimulatedUniswapV4Quote(
   const outBaseUnits = parseUnits(outUnits.toFixed(Math.min(toToken.decimals, 8)), toToken.decimals).toString();
   const rate = (outUnits / amountIn).toFixed(6);
 
+  const isNative = fromToken.isNative || fromToken.address === "0x0000000000000000000000000000000000000000";
+
+  const itemData = isNative
+    ? {
+        to: recipient,
+        data: "0x" as `0x${string}`,
+        value: inBaseUnits,
+        chainId: ROBINHOOD_CHAIN_ID,
+      }
+    : {
+        to: fromToken.address,
+        data: encodeFunctionData({
+          abi: erc20Abi,
+          functionName: "transfer",
+          args: [recipient, BigInt(inBaseUnits)],
+        }),
+        value: "0",
+        chainId: ROBINHOOD_CHAIN_ID,
+      };
+
   const steps = [
     {
       id: "uniswap_v4_swap",
@@ -151,12 +171,7 @@ function getSimulatedUniswapV4Quote(
       items: [
         {
           status: "not_started",
-          data: {
-            to: recipient,
-            data: "0x" as `0x${string}`,
-            value: fromToken.isNative ? inBaseUnits : "0",
-            chainId: ROBINHOOD_CHAIN_ID,
-          },
+          data: itemData,
         },
       ],
     },

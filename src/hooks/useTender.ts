@@ -389,14 +389,22 @@ export type SettlementResult = RailSettlementResult;
  * step is the one legitimate case for empty calldata, because the arguments
  * arrive separately and are encoded client-side.
  */
+const hasCalldata = (data: string | undefined) => Boolean(data) && data !== "0x" && data !== "0x0";
+const hasValue = (val: string | undefined) => {
+  if (!val) return false;
+  try {
+    return BigInt(val) > 0n;
+  } catch {
+    return false;
+  }
+};
+
 export function isExecutableStep(step: V2Step): boolean {
   return step.items.some((item) => {
     if (step.id === "approve") return Boolean(item.data.args?.length) || hasCalldata(item.data.data);
-    return hasCalldata(item.data.data);
+    return hasCalldata(item.data.data) || hasValue(item.data.value);
   });
 }
-
-const hasCalldata = (data: string | undefined) => Boolean(data) && data !== "0x" && data !== "0x0";
 
 /** True when at least one leg of a Robinhood quote can be signed. */
 export function quoteIsExecutable(quote: RailElectionQuote | undefined): boolean {
@@ -526,7 +534,7 @@ async function settleLegOnRobinhood(
     return {
       id: null,
       reason:
-        "Uniswap V4 returned no calldata for this leg — the rail has not published an executable route yet",
+        "Uniswap V4 returned no executable route for this leg — the rail has not published an executable route yet",
     };
   }
 
@@ -536,7 +544,7 @@ async function settleLegOnRobinhood(
   for (const step of executable) {
     for (const item of step.items) {
       const tx = stepToTx(step, item);
-      if (!hasCalldata(tx.data)) continue;
+      if (!hasCalldata(tx.data) && !hasValue(tx.value)) continue;
       last = await send(tx);
     }
   }
