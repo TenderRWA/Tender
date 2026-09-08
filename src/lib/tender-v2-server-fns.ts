@@ -409,6 +409,9 @@ export const getPendingSettlementsV2 = createServerFn({ method: "GET" })
   .validator(
     z.object({
       handle: z.string().trim().optional(),
+      wallet: z.string().trim().optional(),
+      xHandle: z.string().trim().optional(),
+      chain: z.string().trim().optional(),
       status: z.string().trim().optional(),
       limit: z.number().int().min(1).max(100).optional(),
     }),
@@ -418,6 +421,9 @@ export const getPendingSettlementsV2 = createServerFn({ method: "GET" })
       tenderFetch<V2PendingResponse>("/api/v2/bot/pending", {
         query: {
           handle: data.handle,
+          wallet: data.wallet,
+          xHandle: data.xHandle,
+          chain: data.chain,
           status: data.status,
           limit: data.limit ? String(data.limit) : undefined,
         },

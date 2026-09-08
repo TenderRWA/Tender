@@ -847,17 +847,32 @@ export function useXAccount(wallet?: string | null) {
 
 export function usePendingSettlements(params: {
   handle?: string;
+  wallet?: string;
+  xHandle?: string;
   status?: string;
   limit?: number;
 }) {
   const rail = useRail();
   const clean = params.handle ? cleanHandle(params.handle) : "";
+  const cleanWallet = params.wallet?.trim() || "";
+  const cleanX = params.xHandle ? params.xHandle.replace(/^@/, "").trim() : "";
 
   return useQuery<RailPendingSettlement[]>({
-    queryKey: ["tender", rail, "pending-settlements", clean, params.status || "all"],
+    queryKey: [
+      "tender",
+      rail,
+      "pending-settlements",
+      clean,
+      cleanWallet,
+      cleanX,
+      params.status || "all",
+    ],
     queryFn: async () => {
       const data = {
         handle: clean || undefined,
+        wallet: cleanWallet || undefined,
+        xHandle: cleanX || undefined,
+        chain: rail,
         status: params.status || undefined,
         limit: params.limit,
       };

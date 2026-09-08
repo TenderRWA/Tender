@@ -128,7 +128,7 @@ botRouter.get("/status", async (_req: Request, res: Response) => {
 // GET /api/v1/bot/pending — List pending settlements initiated via bot/X
 botRouter.get("/pending", async (req: Request, res: Response) => {
   try {
-    const { handle, status, limit = "50" } = req.query;
+    const { handle, wallet, xHandle, chain, status, limit = "50" } = req.query;
 
     let queryText = "SELECT * FROM pending_settlements WHERE 1=1";
     const params: any[] = [];
@@ -140,10 +140,32 @@ botRouter.get("/pending", async (req: Request, res: Response) => {
       queryText += ` AND status != 'dismissed'`;
     }
 
-    if (handle && typeof handle === "string") {
+    if (chain && typeof chain === "string" && chain.trim().length > 0) {
+      params.push(chain.toLowerCase().trim());
+      queryText += ` AND (LOWER(chain) = $${params.length} OR ($${params.length} = 'robinhood' AND network_id = 4663))`;
+    }
+
+    const orConditions: string[] = [];
+
+    if (wallet && typeof wallet === "string" && wallet.trim().length > 0) {
+      params.push(wallet.toLowerCase().trim());
+      orConditions.push(`LOWER(recipient_wallet) = $${params.length}`);
+    }
+
+    if (xHandle && typeof xHandle === "string" && xHandle.trim().length > 0) {
+      const cleanX = xHandle.replace(/^@/, "").toLowerCase().trim();
+      params.push(cleanX);
+      orConditions.push(`LOWER(author_x_handle) = $${params.length}`);
+    }
+
+    if (handle && typeof handle === "string" && handle.trim().length > 0) {
       const cleanH = handle.replace(/^@/, "").toLowerCase().trim();
       params.push(cleanH);
-      queryText += ` AND (LOWER(recipient_handle) = $${params.length} OR LOWER(author_x_handle) = $${params.length})`;
+      orConditions.push(`(LOWER(recipient_handle) = $${params.length} OR LOWER(author_x_handle) = $${params.length})`);
+    }
+
+    if (orConditions.length > 0) {
+      queryText += ` AND (${orConditions.join(" OR ")})`;
     }
 
     queryText += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;

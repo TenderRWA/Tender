@@ -33,6 +33,7 @@ import {
   useDismissPendingSettlement,
   useNftMetadata,
   useTransferNft,
+  useXAccount,
   type SettlementLegResult,
 } from "@/hooks/useTender";
 import { useRailProfile, useRailStore } from "@/lib/rail";
@@ -96,6 +97,9 @@ export default function Pending() {
   const rail = useRailStore((s) => s.activeRail);
   const { handle } = useTenderSession();
   const { address: wallet } = useWallet();
+  const { data: xData } = useXAccount(wallet);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const xUsername = (xData as any)?.account?.xUsername || (xData as any)?.xUsername;
   const dismiss = useDismissPendingSettlement();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
@@ -109,6 +113,8 @@ export default function Pending() {
   // 1. Fetch pending settlements from X bot
   const { data: botData, isLoading: botLoading } = usePendingSettlements({
     handle: handle || undefined,
+    wallet: wallet || undefined,
+    xHandle: xUsername || undefined,
     status: "all",
   });
   const botSettlements = (
