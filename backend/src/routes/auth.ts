@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { randomBytes } from "crypto";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import { verifyMessage, isAddress } from "viem";
 import { config } from "../config";
 import { query } from "../db";
 import {
@@ -49,8 +50,25 @@ export function verifySolanaSignature(params: {
   }
 }
 
-// GET /api/v1/auth/x/login?wallet=<pubkey>&signature=<base58_sig>&message=<signed_text>&return_url=<url>
-authRouter.get("/x/login", (req: Request, res: Response) => {
+export async function verifyEvmSignature(params: {
+  wallet: string;
+  signature: string;
+  message: string;
+}): Promise<boolean> {
+  try {
+    return await verifyMessage({
+      address: params.wallet as `0x${string}`,
+      message: params.message,
+      signature: params.signature as `0x${string}`,
+    });
+  } catch (err) {
+    console.error("EVM signature verification error:", err);
+    return false;
+  }
+}
+
+// GET /api/v1/auth/x/login?wallet=<pubkey_or_0x>&signature=<sig>&message=<signed_text>&return_url=<url>
+authRouter.get("/x/login", async (req: Request, res: Response) => {
   const wallet = (req.query.wallet as string)?.trim();
   const signature = (req.query.signature as string)?.trim();
   const message = (req.query.message as string)?.trim();
@@ -61,9 +79,15 @@ authRouter.get("/x/login", (req: Request, res: Response) => {
     return;
   }
 
-  // If signature is provided, cryptographically verify wallet ownership
+  // If signature is provided, cryptographically verify wallet ownership (EVM or Solana)
   if (signature && message) {
-    const isValid = verifySolanaSignature({ wallet, signature, message });
+    let isValid = false;
+    if (isAddress(wallet)) {
+      isValid = await verifyEvmSignature({ wallet, signature, message });
+    } else {
+      isValid = verifySolanaSignature({ wallet, signature, message });
+    }
+
     if (!isValid) {
       console.warn(`[X Auth] Cryptographic signature check failed for wallet ${wallet}`);
       const fallbackTarget = returnUrl || `${config.frontendUrl}/dashboard`;
@@ -135,16 +159,22 @@ authRouter.get("/x/callback", async (req: Request, res: Response) => {
       [session.wallet, xUser.id, xUser.username]
     );
 
-    // Also update any handles registered to this wallet so handles table reflects X username
+    // Also update any handles registered to this wallet so handles tables reflect X username
     try {
       await query(
         `UPDATE handles 
          SET x_username = $1, x_user_id = $2, updated_at = NOW() 
-         WHERE owner_wallet = $3`,
+         WHERE LOWER(owner_wallet) = LOWER($3)`,
+        [xUser.username, xUser.id, session.wallet]
+      );
+      await query(
+        `UPDATE v2_handles 
+         SET x_handle = $1, x_user_id = $2, updated_at = NOW() 
+         WHERE LOWER(owner_wallet) = LOWER($3)`,
         [xUser.username, xUser.id, session.wallet]
       );
     } catch (handleErr) {
-      console.warn("Could not update handles table with X identity:", handleErr);
+      console.warn("Could not update handles/v2_handles table with X identity:", handleErr);
     }
 
     const redirectTarget = session.returnUrl || fallbackRedirect;
@@ -184,7 +214,32 @@ authRouter.get("/x/account", async (req: Request, res: Response) => {
       return;
     }
 
-    // Also check handles table for handle claimed by this wallet with an X username or metadata
+    // Check v2_handles table (Robinhood Chain)
+    try {
+      const v2HandleResult = await query(
+        "SELECT owner_wallet, x_user_id, x_handle, metadata, updated_at FROM v2_handles WHERE LOWER(owner_wallet) = LOWER($1) ORDER BY updated_at DESC LIMIT 1",
+        [wallet]
+      );
+
+      if (v2HandleResult.rows && v2HandleResult.rows.length > 0) {
+        const v2Row = v2HandleResult.rows[0];
+        const xUsername = v2Row.x_handle || v2Row.metadata?.xUsername || v2Row.metadata?.xHandle;
+        if (xUsername) {
+          res.json({
+            linked: true,
+            account: {
+              walletAddress: v2Row.owner_wallet,
+              xUserId: v2Row.x_user_id || "verified",
+              xUsername: String(xUsername).replace(/^@/, ""),
+              linkedAt: v2Row.updated_at,
+            },
+          });
+          return;
+        }
+      }
+    } catch {}
+
+    // Check handles table (Solana)
     const handleResult = await query(
       "SELECT owner_wallet, x_user_id, x_username, metadata, updated_at FROM handles WHERE LOWER(owner_wallet) = LOWER($1) ORDER BY updated_at DESC LIMIT 1",
       [wallet]
@@ -226,8 +281,11 @@ authRouter.post("/x/unlink", async (req: Request, res: Response) => {
       return;
     }
 
-    await query("DELETE FROM x_accounts WHERE wallet_address = $1", [wallet]);
-    await query("UPDATE handles SET x_username = NULL, x_user_id = NULL WHERE owner_wallet = $1", [wallet]);
+    await query("DELETE FROM x_accounts WHERE LOWER(wallet_address) = LOWER($1)", [wallet]);
+    await query("UPDATE handles SET x_username = NULL, x_user_id = NULL WHERE LOWER(owner_wallet) = LOWER($1)", [wallet]);
+    try {
+      await query("UPDATE v2_handles SET x_handle = NULL, x_user_id = NULL WHERE LOWER(owner_wallet) = LOWER($1)", [wallet]);
+    } catch {}
 
     res.json({ success: true });
   } catch (err: any) {

@@ -154,3 +154,65 @@ v2SettleRouter.post("/confirm", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to confirm settlement", details: err.message });
   }
 });
+
+// GET /api/v2/settle/history - Query confirmed Robinhood settlement receipts
+v2SettleRouter.get("/history", async (req: Request, res: Response) => {
+  try {
+    const { wallet, handle, limit = "20", offset = "0" } = req.query;
+
+    let queryText = `
+      SELECT id, request_id, tx_hash, sender_wallet, recipient_handle, recipient_wallet,
+             input_token_symbol, input_token_address, input_amount, output_breakdown,
+             status, fee_collected_usd, created_at
+      FROM v2_settlements
+    `;
+    const params: any[] = [];
+    const conditions: string[] = [];
+
+    if (wallet) {
+      params.push((wallet as string).trim());
+      conditions.push(`(LOWER(sender_wallet) = LOWER($${params.length}) OR LOWER(recipient_wallet) = LOWER($${params.length}))`);
+    }
+
+    if (handle) {
+      const cleanH = (handle as string).replace(/^@|^#/, "").trim().toLowerCase();
+      params.push(cleanH);
+      conditions.push(`LOWER(recipient_handle) = LOWER($${params.length})`);
+    }
+
+    if (conditions.length > 0) {
+      queryText += " WHERE " + conditions.join(" AND ");
+    }
+
+    queryText += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(Math.min(Number(limit) || 20, 100));
+    params.push(Number(offset) || 0);
+
+    const result = await query(queryText, params);
+
+    const settlements = (result.rows || []).map((row: any) => ({
+      id: String(row.id),
+      requestId: row.request_id,
+      txHash: row.tx_hash,
+      senderWallet: row.sender_wallet,
+      recipientHandle: row.recipient_handle,
+      recipientWallet: row.recipient_wallet,
+      inputTokenSymbol: row.input_token_symbol,
+      inputTokenAddress: row.input_token_address,
+      inputAmount: row.input_amount,
+      outputBreakdown: typeof row.output_breakdown === "string" ? JSON.parse(row.output_breakdown) : (row.output_breakdown || []),
+      status: row.status,
+      feeCollectedUsd: Number(row.fee_collected_usd || 0),
+      createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    }));
+
+    res.json({
+      settlements,
+      total: settlements.length,
+      networkId: 4663,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch Robinhood settlement history", details: err.message });
+  }
+});
+

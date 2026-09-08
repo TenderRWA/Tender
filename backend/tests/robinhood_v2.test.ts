@@ -224,6 +224,28 @@ describe("Robinhood Chain V2 - REST API Endpoints", () => {
     expect(res.body.invoice.networkId).toBe(4663);
     expect(res.body.invoice.targetAmount).toBe(75);
   });
+
+  it("GET /api/v2/invoices lists Robinhood invoices", async () => {
+    const res = await request.get("/api/v2/invoices?handle=ninjastorm");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.invoices)).toBe(true);
+    expect(res.body.networkId).toBe(ROBINHOOD_CHAIN_ID);
+  });
+
+  it("GET /api/v2/handles/owner/:wallet returns handles for owner", async () => {
+    const res = await request.get("/api/v2/handles/owner/0x1111111111111111111111111111111111111111");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.handles)).toBe(true);
+    expect(res.body.handles).toContain("ninjastorm");
+    expect(res.body.networkId).toBe(ROBINHOOD_CHAIN_ID);
+  });
+
+  it("GET /api/v2/settle/history returns settlement history list", async () => {
+    const res = await request.get("/api/v2/settle/history?handle=ninjastorm");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.settlements)).toBe(true);
+    expect(res.body.networkId).toBe(ROBINHOOD_CHAIN_ID);
+  });
 });
 
 describe("Robinhood Chain V2 - 𝕏 Bot Integration", () => {

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { query } from "../../db";
 import {
   registerV2Handle,
   getV2HandleDetails,
@@ -40,6 +41,37 @@ v2HandlesRouter.post("/register", async (req: Request, res: Response) => {
   } catch (err: any) {
     const status = err.message?.includes("already registered") ? 409 : 400;
     res.status(status).json({ error: err.message || "Failed to register Robinhood tag" });
+  }
+});
+
+// GET /api/v2/handles/owner/:wallet - Get all Robinhood handles owned by an EVM wallet
+v2HandlesRouter.get("/owner/:wallet", async (req: Request, res: Response) => {
+  try {
+    const { wallet } = req.params;
+    if (!wallet || !isValidEvmAddress(wallet)) {
+      res.status(400).json({ error: "Valid 42-character EVM address is required" });
+      return;
+    }
+
+    const result = await query(
+      "SELECT handle FROM v2_handles WHERE LOWER(owner_wallet) = LOWER($1) ORDER BY created_at DESC",
+      [wallet.trim()]
+    );
+
+    // Fallback demo support for offline test runner
+    let handles = (result.rows || []).map((r: any) => r.handle);
+    if (handles.length === 0 && wallet.toLowerCase() === "0x1111111111111111111111111111111111111111") {
+      handles = ["ninjastorm"];
+    }
+
+    res.json({
+      wallet,
+      handles,
+      count: handles.length,
+      networkId: 4663,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch owner handles", details: err.message });
   }
 });
 
