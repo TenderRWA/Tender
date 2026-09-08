@@ -183,7 +183,6 @@ export default function WalletModal({ open, onClose }: { open: boolean; onClose:
 
             <p className="mb-5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
               {profile.network}
-              {profile.chainId ? ` · chain ${profile.chainId}` : ""}
             </p>
 
             <div className="flex flex-col gap-2">

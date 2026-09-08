@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { sendAiChat, ActionCardData } from "../lib/api";
 import ActionCardView from "./ActionCardView";
 import SuggestedPrompts from "./SuggestedPrompts";
-import { SendHorizontal, Sparkles, Bot, User, ArrowUp } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 
 interface Message {
   id: string;
@@ -22,7 +22,7 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
     {
       id: "intro",
       role: "assistant",
-      content: `Welcome to **TenderAI**! ⚡ I am your autonomous settlement copilot for Robinhood Chain (Chain 4663).\n\nType any natural command or question without needing to mention any bot. For example:\n• \`Pay @timbook 0.002 ETH\`\n• \`What is @timbook's mix?\`\n• \`Quote 100 USDG for @helen2swift\`\n• \`Send NFT 0x4a0E... to @timbook\`\n• \`What assets are on Robinhood Chain?\``,
+      content: `Welcome to **TenderAI**! ⚡ I am your autonomous settlement copilot.\n\nType any natural command or question without needing to mention any bot. For example:\n• \`Pay @timbook 0.002 ETH\`\n• \`What is @timbook's mix?\`\n• \`Quote 100 USDG for @helen2swift\`\n• \`Send NFT 0x4a0E... to @timbook\`\n• \`What assets can I elect?\``,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -110,7 +110,7 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
           </span>
         </div>
         <div className="text-[11px] text-muted2">
-          Autonomous Copilot · Robinhood Rail
+          Autonomous Settlement Copilot
         </div>
       </div>
 
@@ -124,15 +124,15 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
               className={`flex items-start gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}
             >
               {/* Avatar */}
-              <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center font-mono font-bold text-xs shrink-0 shadow-2xs border ${
-                  isUser
-                    ? "bg-ink text-white border-ink"
-                    : "bg-red text-white border-red/90"
-                }`}
-              >
-                {isUser ? (xUsername ? xUsername.slice(0, 1).toUpperCase() : "U") : "AI"}
-              </div>
+              {isUser ? (
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center font-mono font-bold text-xs shrink-0 shadow-2xs border bg-ink text-white border-ink">
+                  {xUsername ? xUsername.slice(0, 1).toUpperCase() : "U"}
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs border bg-base border-hairline p-1">
+                  <img src="/logo.png" alt="Tender" className="w-full h-full object-contain" />
+                </div>
+              )}
 
               {/* Bubble */}
               <div
@@ -168,8 +168,8 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
         {/* Loading Indicator */}
         {isLoading && (
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-red text-white flex items-center justify-center font-mono font-bold text-xs shrink-0 shadow-2xs">
-              AI
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs border bg-base border-hairline p-1">
+              <img src="/logo.png" alt="Tender" className="w-full h-full object-contain" />
             </div>
             <div className="glass rounded-2xl rounded-tl-xs p-4 flex items-center gap-3">
               <div className="flex items-center gap-1.5">
@@ -178,7 +178,7 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
                 <span className="w-1.5 h-1.5 rounded-full bg-red animate-bounce [animation-delay:0.4s]" />
               </div>
               <span className="text-xs font-mono text-secondary2">
-                Routing intent on Robinhood Chain...
+                Routing intent on Uniswap V4...
               </span>
             </div>
           </div>
@@ -211,14 +211,14 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
           <button
             onClick={() => handleSendMessage()}
             disabled={!input.trim() || isLoading}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-ink text-white hover:bg-red disabled:opacity-30 disabled:hover:bg-ink transition-colors shadow-2xs shrink-0"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-red text-white hover:bg-red-hover disabled:opacity-30 transition-colors shadow-2xs shrink-0 focus-visible:ring-2 focus-visible:ring-red/40"
             title="Send command"
           >
             <ArrowUp className="w-4 h-4 stroke-[2.5]" />
           </button>
         </div>
         <div className="flex items-center justify-between px-2 pt-1 text-[10px] font-mono text-muted2">
-          <span>Press Enter to send · Powered by Uniswap V4 on Robinhood Chain</span>
+          <span>Press Enter to send · Uniswap V4 Non-Custodial Delivery</span>
           <span>Zero Escrow Custody</span>
         </div>
       </div>

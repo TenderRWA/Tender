@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 import { checkXBindingStatus, XStatusResponse } from "../lib/api";
 import { formatAddress } from "../lib/utils";
-import { ExternalLink, Sparkles, Wallet, RefreshCw } from "lucide-react";
+import { ExternalLink, Wallet, RefreshCw } from "lucide-react";
+import ConnectWalletModal from "./ConnectWalletModal";
 
 interface AuthGateProps {
   children: (props: { xUsername: string | null; wallet: string }) => React.ReactNode;
@@ -10,11 +11,11 @@ interface AuthGateProps {
 
 export default function AuthGate({ children }: AuthGateProps) {
   const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
 
   const [isCheckingX, setIsCheckingX] = useState(false);
   const [xData, setXData] = useState<XStatusResponse | null>(null);
+  const [showWalletModal, setShowWalletModal] = useState(false);
 
   const mainAppUrl = import.meta.env.VITE_MAIN_APP_URL || "https://tenderrwa.com";
 
@@ -43,51 +44,47 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   // 1. Wallet Connection Gate
   if (!isConnected || !address) {
-    const handleConnect = () => {
-      const target =
-        connectors.find((c) => c.name.toLowerCase().includes("metamask")) || connectors[0];
-      if (target) connect({ connector: target });
-    };
-
     return (
-      <div className="flex min-h-[75vh] items-center justify-center p-4">
-        <div className="glass max-w-lg w-full rounded-2xl p-8 md:p-10 text-center space-y-6 shadow-sm">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-ink text-white flex items-center justify-center font-display font-black text-2xl shadow-md">
-            T
-          </div>
+      <>
+        <div className="flex min-h-[75vh] items-center justify-center p-4">
+          <div className="glass max-w-lg w-full rounded-2xl p-8 md:p-10 text-center space-y-6 shadow-sm">
+            <img
+              src="/logo.png"
+              alt="TENDER logo"
+              className="mx-auto h-12 w-auto object-contain"
+            />
 
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-red/20 bg-red/8 px-3 py-1 font-mono text-[11px] font-semibold text-red">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Robinhood Chain (4663)</span>
+            <div className="space-y-2">
+              <h1 className="font-display font-bold text-2xl md:text-3xl text-ink tracking-tight">
+                Connect to TenderAI
+              </h1>
+              <p className="font-body text-sm text-secondary2 max-w-sm mx-auto">
+                Conversational portfolio settlement copilot. Type natural commands to settle into
+                custom stock mixes with zero custody.
+              </p>
             </div>
-            <h1 className="font-display font-bold text-2xl md:text-3xl text-ink tracking-tight">
-              Connect to TenderAI
-            </h1>
-            <p className="font-body text-sm text-secondary2 max-w-sm mx-auto">
-              Conversational portfolio settlement copilot. Type natural commands to settle into
-              custom stock mixes with zero custody.
-            </p>
-          </div>
 
-          <div className="pt-2">
-            <button
-              onClick={handleConnect}
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-ink px-6 py-3.5 font-mono text-sm font-semibold text-white hover:bg-black transition-all shadow-sm"
-            >
-              <Wallet className="w-4 h-4 text-white/80" />
-              <span>Connect Robinhood EVM Wallet</span>
-            </button>
-            <p className="mt-3 text-[11px] font-mono text-muted2">
-              Supports MetaMask, Rabby, Rainbow, Coinbase, and Injected Wallets
-            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => setShowWalletModal(true)}
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-red px-6 py-3.5 font-mono text-sm font-semibold text-white hover:bg-red-hover transition-all shadow-xs focus-visible:ring-2 focus-visible:ring-red/40"
+              >
+                <Wallet className="w-4 h-4 text-white/90" />
+                <span>Connect EVM Wallet</span>
+              </button>
+              <p className="mt-3 text-[11px] font-mono text-muted2">
+                Supports MetaMask, Rabby, Rainbow, Coinbase, and Injected Wallets
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+
+        <ConnectWalletModal open={showWalletModal} onClose={() => setShowWalletModal(false)} />
+      </>
     );
   }
 
-  // 3. Verifying 𝕏 state loader
+  // 2. Verifying 𝕏 state loader
   if (isCheckingX) {
     return (
       <div className="flex min-h-[75vh] items-center justify-center p-4">
@@ -99,7 +96,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  // 4. 𝕏 Binding Gate: If wallet is connected but 𝕏 is NOT linked
+  // 3. 𝕏 Binding Gate: If wallet is connected but 𝕏 is NOT linked
   const isLinked = Boolean(xData?.data?.linked ?? xData?.linked);
   const xUser = (xData?.data?.account?.xUsername ?? xData?.account?.xUsername) || null;
 
@@ -167,6 +164,6 @@ export default function AuthGate({ children }: AuthGateProps) {
     );
   }
 
-  // 5. Authorized! Render Chat Terminal
+  // 4. Authorized! Render Chat Terminal
   return <>{children({ xUsername: xUser, wallet: address })}</>;
 }

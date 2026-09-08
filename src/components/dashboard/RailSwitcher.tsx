@@ -87,7 +87,6 @@ export default function RailSwitcher({ className = "" }: { className?: string })
                     <span className="block font-mono text-xs font-semibold">{rail.network}</span>
                     <span className="mt-0.5 block font-mono text-[10px] tracking-[0.08em] text-muted2 uppercase">
                       {rail.venueLabel}
-                      {rail.chainId ? ` · chain ${rail.chainId}` : ""}
                     </span>
                   </span>
                   {isActive && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red" />}

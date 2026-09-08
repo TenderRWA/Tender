@@ -73,7 +73,7 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
                 {isPayment ? "Settlement Order" : "Settlement Quote"}
               </span>
               <span className="rounded bg-card2 px-1.5 py-0.5 font-mono text-[10px] text-secondary2">
-                Uniswap V4 · Chain 4663
+                Uniswap V4 Atomicity
               </span>
             </div>
             <h4 className="font-display font-bold text-base text-ink mt-0.5">
@@ -138,7 +138,7 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
           <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-xs font-mono text-emerald-600 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span>Payment executed on Robinhood Chain!</span>
+              <span>Payment executed on-chain!</span>
             </div>
             <a
               href={`https://robinhoodchain.blockscout.com/tx/${txHash}`}
@@ -174,7 +174,7 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Sign & Settle on Robinhood Chain</span>
+                  <span>Sign & Settle Now</span>
                 </>
               )}
             </button>
