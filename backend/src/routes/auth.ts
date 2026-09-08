@@ -186,8 +186,8 @@ authRouter.get("/x/callback", async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/auth/x/account?wallet=<wallet_address>
-authRouter.get("/x/account", async (req: Request, res: Response) => {
+// GET /api/v1/auth/x/account?wallet=<wallet_address> or /api/v1/auth/x/status?wallet=<wallet_address>
+const handleXAccountStatus = async (req: Request, res: Response) => {
   try {
     const wallet = (req.query.wallet as string)?.trim();
     if (!wallet) {
@@ -270,7 +270,10 @@ authRouter.get("/x/account", async (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch linked X account", details: err.message });
   }
-});
+};
+
+authRouter.get("/x/account", handleXAccountStatus);
+authRouter.get("/x/status", handleXAccountStatus);
 
 // POST /api/v1/auth/x/unlink
 authRouter.post("/x/unlink", async (req: Request, res: Response) => {

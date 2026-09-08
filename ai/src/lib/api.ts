@@ -62,14 +62,25 @@ export interface XStatusResponse {
   };
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL || "https://api.tenderrwa.com").replace(/\/+$/, "");
+const rawApi = (import.meta.env.VITE_API_URL || "").trim();
+const API_BASE = (rawApi.startsWith("http") ? rawApi : "https://api.tenderrwa.com").replace(/\/+$/, "");
 
 export async function sendAiChat(payload: AiChatPayload): Promise<AiChatResponse> {
-  const res = await fetch(`${API_BASE}/api/v2/ai/chat`, {
+  // 1. Try server function first (server-side, secure)
+  let res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  });
+  }).catch(() => null);
+
+  // 2. Fallback to direct backend if server function returns 404 or is unavailable
+  if (!res || res.status === 404) {
+    res = await fetch(`${API_BASE}/api/v2/ai/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
@@ -80,18 +91,41 @@ export async function sendAiChat(payload: AiChatPayload): Promise<AiChatResponse
 }
 
 export async function getAiContext(): Promise<any> {
-  const res = await fetch(`${API_BASE}/api/v2/ai/context`);
+  // 1. Try server function first
+  let res = await fetch("/api/context").catch(() => null);
+
+  // 2. Fallback to direct backend
+  if (!res || res.status === 404) {
+    res = await fetch(`${API_BASE}/api/v2/ai/context`);
+  }
+
   if (!res.ok) throw new Error("Failed to fetch AI context");
   return await res.json();
 }
 
 export async function checkXBindingStatus(walletAddress: string): Promise<XStatusResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/auth/x/status?wallet=${encodeURIComponent(walletAddress)}`);
+    // 1. Try server function first (server-side, secure)
+    let res = await fetch(`/api/auth/x-account?wallet=${encodeURIComponent(walletAddress)}`).catch(() => null);
+
+    // 2. Fallback to direct backend if server function returns 404 or is unavailable
+    if (!res || res.status === 404) {
+      res = await fetch(`${API_BASE}/api/v1/auth/x/account?wallet=${encodeURIComponent(walletAddress)}`);
+      if (res.status === 404) {
+        res = await fetch(`${API_BASE}/api/v1/auth/x/status?wallet=${encodeURIComponent(walletAddress)}`);
+      }
+    }
+
     if (!res.ok) {
       return { linked: false };
     }
-    return await res.json();
+
+    const data = await res.json();
+    return {
+      linked: Boolean(data?.linked),
+      account: data?.account || undefined,
+      data: data,
+    };
   } catch {
     return { linked: false };
   }
