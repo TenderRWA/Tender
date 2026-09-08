@@ -2,7 +2,7 @@ import Groq from "groq-sdk";
 import { config } from "../../config";
 import {
   ROBINHOOD_CHAIN_ID,
-  ROBINHOOD_TOKENS,
+  ALL_ROBINHOOD_TOKENS,
   FEATURED_ROBINHOOD_ASSETS,
   resolveRobinhoodToken,
   RobinhoodTokenInfo,
