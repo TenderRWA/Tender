@@ -3,13 +3,45 @@ import type { UiWallet, UiWalletAccount } from "@wallet-standard/ui";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
-import { useWallet } from "@/lib/wallet/wallet-context";
+import { useRailProfile } from "@/lib/rail";
+import { useSolanaWallet, useWallet } from "@/lib/wallet/wallet-context";
+
+const rowCls =
+  "flex w-full items-center gap-3 rounded-xl border border-hairline/60 px-4 py-3 text-left transition-colors duration-150 hover:border-red disabled:opacity-40";
+
+function RowShell({
+  icon,
+  name,
+  status,
+  onClick,
+  disabled,
+}: {
+  icon?: string;
+  name: string;
+  status: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={rowCls}>
+      {icon ? (
+        <img src={icon} alt="" className="h-7 w-7 rounded-md" aria-hidden />
+      ) : (
+        <span className="h-7 w-7 rounded-md bg-raised" aria-hidden />
+      )}
+      <span className="min-w-0 flex-1 font-body text-sm text-foreground">{name}</span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+        {status}
+      </span>
+    </button>
+  );
+}
 
 /**
- * One row per detected wallet. `useConnect` is a per-wallet hook, so each row has
- * to be its own component rather than a loop inside the modal.
+ * Solana row. `useConnect` is a per-wallet hook, so each row has to be its own
+ * component rather than a loop inside the modal.
  */
-function WalletRow({
+function SolanaWalletRow({
   wallet,
   onConnected,
   onError,
@@ -37,37 +69,55 @@ function WalletRow({
   };
 
   return (
-    <button
-      type="button"
+    <RowShell
+      icon={wallet.icon}
+      name={wallet.name}
+      status={isConnecting ? "Connecting…" : wallet.accounts.length ? "Connected" : "Detected"}
       onClick={handleClick}
       disabled={isConnecting}
-      className="flex w-full items-center gap-3 rounded-xl border border-hairline/60 px-4 py-3 text-left transition-colors duration-150 hover:border-red disabled:opacity-40"
-    >
-      {wallet.icon ? (
-        <img src={wallet.icon} alt="" className="h-7 w-7 rounded-md" aria-hidden />
-      ) : (
-        <span className="h-7 w-7 rounded-md bg-raised" aria-hidden />
-      )}
-      <span className="min-w-0 flex-1 font-body text-sm text-foreground">{wallet.name}</span>
-      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-        {isConnecting ? "Connecting…" : wallet.accounts.length ? "Connected" : "Detected"}
-      </span>
-    </button>
+    />
   );
 }
 
+/**
+ * Connect dialog for whichever rail is active.
+ *
+ * The two rails discover wallets differently — Wallet Standard registers them
+ * asynchronously and connects per wallet; wagmi surfaces EIP-6963 providers as
+ * connectors — so the list is built per rail rather than from one shared array.
+ */
 export default function WalletModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { wallets, select } = useWallet();
+  const { rail, wallets, connect } = useWallet();
+  const solana = useSolanaWallet();
+  const profile = useRailProfile();
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
+    setError("");
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  const connectEvm = async (id: string, name: string) => {
+    setError("");
+    try {
+      await connect(id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Could not connect to ${name}.`);
+    }
+  };
+
+  const empty =
+    rail === "robinhood"
+      ? "No EVM wallet detected. Install MetaMask, Rabby or Coinbase Wallet, then reload this page."
+      : "No Solana wallet detected. Install Phantom, Solflare or Backpack, then reload this page.";
+
+  const hasWallets = rail === "robinhood" ? wallets.length > 0 : solana.wallets.length > 0;
 
   return (
     <AnimatePresence>
@@ -90,9 +140,9 @@ export default function WalletModal({ open, onClose }: { open: boolean; onClose:
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="Connect a Solana wallet"
+            aria-label={`Connect a wallet on ${profile.network}`}
           >
-            <div className="mb-5 flex items-center justify-between gap-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
               <span className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.12em] text-secondary2">
                 <span className="h-1.5 w-1.5 bg-red" aria-hidden />
                 CONNECT WALLET
@@ -107,25 +157,37 @@ export default function WalletModal({ open, onClose }: { open: boolean; onClose:
               </button>
             </div>
 
+            <p className="mb-5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
+              {profile.network}
+              {profile.chainId ? ` · chain ${profile.chainId}` : ""}
+            </p>
+
             <div className="flex flex-col gap-2">
-              {wallets.map((wallet) => (
-                <WalletRow
-                  key={wallet.name}
-                  wallet={wallet}
-                  onError={setError}
-                  onConnected={(account) => {
-                    select(account);
-                    onClose();
-                  }}
-                />
-              ))}
+              {rail === "robinhood"
+                ? wallets.map((wallet) => (
+                    <RowShell
+                      key={wallet.id}
+                      icon={wallet.icon}
+                      name={wallet.name}
+                      status="Detected"
+                      onClick={() => void connectEvm(wallet.id, wallet.name)}
+                    />
+                  ))
+                : solana.wallets.map((wallet) => (
+                    <SolanaWalletRow
+                      key={wallet.name}
+                      wallet={wallet}
+                      onError={setError}
+                      onConnected={(account) => {
+                        solana.select(account);
+                        onClose();
+                      }}
+                    />
+                  ))}
             </div>
 
-            {wallets.length === 0 && (
-              <p className="font-body text-sm leading-relaxed text-muted2">
-                No Solana wallet detected. Install Phantom, Solflare or Backpack, then reload this
-                page.
-              </p>
+            {!hasWallets && (
+              <p className="font-body text-sm leading-relaxed text-muted2">{empty}</p>
             )}
 
             {error && (

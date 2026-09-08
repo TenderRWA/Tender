@@ -1,208 +1,139 @@
+/**
+ * The wallet every component talks to.
+ *
+ * Both rails' providers are mounted at once, and `useWallet()` hands back
+ * whichever one the active rail needs behind a single interface. A component
+ * asks for `address`, `connected`, `disconnect` without knowing whether a
+ * Solana account or an EVM account is behind them.
+ *
+ * The two signing paths stay distinct on purpose. A Solana settlement is a
+ * base64 transaction the backend assembled and the wallet broadcasts; a
+ * Robinhood settlement is a list of pre-built EVM calls the client sends one at
+ * a time. Collapsing them into one method would hide a real difference in how
+ * the two rails execute, so calling the wrong one throws with an explanation
+ * rather than silently doing nothing.
+ */
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+
+import { useRail, type RailId } from "@/lib/rail";
 import {
-  SolanaSignAndSendTransaction,
-  SolanaSignMessage,
-  type SolanaSignAndSendTransactionFeature,
-  type SolanaSignMessageFeature,
-} from "@solana/wallet-standard-features";
-import type { IdentifierString } from "@wallet-standard/base";
-import { StandardDisconnect, type StandardDisconnectFeature } from "@wallet-standard/features";
-import { useWallets } from "@wallet-standard/react";
-import { getWalletAccountFeature, type UiWallet, type UiWalletAccount } from "@wallet-standard/ui";
+  EvmWalletProvider,
+  useEvmWallet,
+  type EvmTxRequest,
+  type EvmWalletValue,
+} from "@/lib/wallet/evm-wallet";
 import {
-  getWalletAccountForUiWalletAccount,
-  getWalletForHandle,
-} from "@wallet-standard/ui-registry";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+  SolanaWalletProvider,
+  useSolanaWallet,
+  type SolanaWalletValue,
+} from "@/lib/wallet/solana-wallet";
 
-import { base64ToBytes, bytesToBase58 } from "@/lib/solana-bytes";
-
-/** Wallet Standard chain identifiers, keyed by the network name in VITE_SOLANA_NETWORK. */
-const CHAIN_BY_NETWORK: Record<string, IdentifierString> = {
-  "mainnet-beta": "solana:mainnet",
-  mainnet: "solana:mainnet",
-  devnet: "solana:devnet",
-  testnet: "solana:testnet",
-  localnet: "solana:localnet",
-};
-
-export const SOLANA_CHAIN: IdentifierString =
-  CHAIN_BY_NETWORK[import.meta.env.VITE_SOLANA_NETWORK ?? "mainnet-beta"] ?? "solana:mainnet";
-
-const STORAGE_KEY = "tender-wallet";
-
-interface PersistedWallet {
+/** One connectable wallet, whichever rail it belongs to. */
+export interface RailWalletOption {
+  /** Opaque handle passed back to `connect`. */
+  id: string;
   name: string;
-  address: string;
+  icon?: string;
 }
 
-function readPersisted(): PersistedWallet | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PersistedWallet) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writePersisted(value: PersistedWallet | null) {
-  try {
-    if (value) localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    else localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* private mode / storage disabled — selection just won't survive a reload */
-  }
-}
-
-interface WalletContextValue {
-  /** Detected wallets that can actually sign and send on our chain. */
-  wallets: readonly UiWallet[];
-  account: UiWalletAccount | null;
+export interface WalletContextValue {
+  rail: RailId;
+  /** Wallets the active rail can connect to right now. */
+  wallets: RailWalletOption[];
   address: string | null;
   connected: boolean;
   walletName: string | null;
   walletIcon: string | null;
-  select: (account: UiWalletAccount) => void;
+  isConnecting: boolean;
+  /** Robinhood only: connected, but the wallet is on another chain. */
+  wrongNetwork: boolean;
+  connect: (walletId: string) => Promise<void>;
   disconnect: () => Promise<void>;
-  /** Signs and broadcasts a backend-assembled transaction; resolves to its base58 signature. */
+  /** Robinhood only; a no-op on Solana, which has no chain to switch. */
+  switchNetwork: () => Promise<void>;
+  /** Solana only. Signs and broadcasts a backend-assembled transaction. */
   signAndSendBase64: (base64Transaction: string) => Promise<string>;
-  /** Cryptographically signs an arbitrary utf-8 message for authentication proof. */
+  /** Robinhood only. Broadcasts one pre-built EVM call, resolves to its hash. */
+  sendTransaction: (tx: EvmTxRequest) => Promise<string>;
   signMessage: (message: string) => Promise<string>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
-function supportsSigning(wallet: UiWallet): boolean {
-  return (
-    wallet.features.includes(SolanaSignAndSendTransaction) &&
-    wallet.chains.some((chain) => chain === SOLANA_CHAIN)
-  );
+const wrongRail = (needed: RailId, method: string) => () => {
+  throw new Error(`${method} is only available on the ${needed} rail. Switch rails first.`);
+};
+
+function buildValue(
+  rail: RailId,
+  solana: SolanaWalletValue,
+  evm: EvmWalletValue,
+): WalletContextValue {
+  if (rail === "robinhood") {
+    return {
+      rail,
+      wallets: evm.wallets.map((w) => ({ id: w.id, name: w.name, icon: w.icon })),
+      address: evm.address,
+      connected: evm.connected,
+      walletName: evm.walletName,
+      walletIcon: evm.walletIcon,
+      isConnecting: evm.isConnecting,
+      wrongNetwork: evm.wrongNetwork,
+      connect: evm.connect,
+      disconnect: evm.disconnect,
+      switchNetwork: evm.switchToRobinhood,
+      signAndSendBase64: wrongRail("solana", "signAndSendBase64"),
+      sendTransaction: evm.sendTransaction,
+      signMessage: evm.signMessage,
+    };
+  }
+
+  return {
+    rail,
+    // Wallet Standard keys a wallet by its name, so that doubles as the id.
+    wallets: solana.wallets.map((w) => ({ id: w.name, name: w.name, icon: w.icon })),
+    address: solana.address,
+    connected: solana.connected,
+    walletName: solana.walletName,
+    walletIcon: solana.walletIcon,
+    isConnecting: false,
+    wrongNetwork: false,
+    connect: async (walletId) => {
+      const wallet = solana.wallets.find((w) => w.name === walletId);
+      if (!wallet) throw new Error("That wallet is no longer available.");
+      const account = wallet.accounts[0];
+      if (!account) {
+        throw new Error(`${wallet.name} has not authorized an account yet.`);
+      }
+      solana.select(account);
+    },
+    disconnect: solana.disconnect,
+    switchNetwork: async () => {},
+    signAndSendBase64: solana.signAndSendBase64,
+    sendTransaction: wrongRail("robinhood", "sendTransaction"),
+    signMessage: solana.signMessage,
+  };
+}
+
+/** Reads both providers and publishes the active rail's one. */
+function RailWalletBridge({ children }: { children: ReactNode }) {
+  const rail = useRail();
+  const solana = useSolanaWallet();
+  const evm = useEvmWallet();
+
+  const value = useMemo(() => buildValue(rail, solana, evm), [rail, solana, evm]);
+
+  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
 export function TenderWalletProvider({ children }: { children: ReactNode }) {
-  const detected = useWallets();
-  const [account, setAccount] = useState<UiWalletAccount | null>(null);
-
-  const wallets = useMemo(() => detected.filter(supportsSigning), [detected]);
-
-  // Wallets register asynchronously after hydration, so restoring the previous
-  // selection has to react to the list rather than run once on mount. A wallet
-  // that still lists the account has already authorized us: no connect needed.
-  useEffect(() => {
-    const persisted = readPersisted();
-    if (!persisted) return;
-
-    const wallet = wallets.find((w) => w.name === persisted.name);
-    const match = wallet?.accounts.find((a) => a.address === persisted.address);
-
-    setAccount((current) => {
-      if (!current) return match ?? null;
-      // Drop a selection the wallet has since revoked (disconnected in the extension).
-      const stillLive = wallets
-        .find((w) => w.name === persisted.name)
-        ?.accounts.some((a) => a.address === current.address);
-      return stillLive ? current : (match ?? null);
-    });
-  }, [wallets]);
-
-  const select = useCallback((next: UiWalletAccount) => {
-    setAccount(next);
-    const wallet = getWalletForHandle(next);
-    writePersisted({ name: wallet.name, address: next.address });
-  }, []);
-
-  const disconnect = useCallback(async () => {
-    const current = account;
-    setAccount(null);
-    writePersisted(null);
-    if (!current) return;
-
-    const wallet = getWalletForHandle(current);
-    const feature = wallet.features[StandardDisconnect] as
-      StandardDisconnectFeature[typeof StandardDisconnect] | undefined;
-    // Not every wallet implements standard:disconnect; dropping our reference is
-    // the meaningful part either way.
-    await feature?.disconnect();
-  }, [account]);
-
-  const signAndSendBase64 = useCallback(
-    async (base64Transaction: string) => {
-      if (!account) throw new Error("Connect a wallet before signing.");
-
-      const feature = getWalletAccountFeature(
-        account,
-        SolanaSignAndSendTransaction,
-      ) as SolanaSignAndSendTransactionFeature[typeof SolanaSignAndSendTransaction];
-
-      const [output] = await feature.signAndSendTransaction({
-        account: getWalletAccountForUiWalletAccount(account),
-        chain: SOLANA_CHAIN,
-        transaction: base64ToBytes(base64Transaction),
-      });
-
-      if (!output?.signature) throw new Error("Wallet returned no transaction signature.");
-      return bytesToBase58(output.signature);
-    },
-    [account],
+  return (
+    <EvmWalletProvider>
+      <SolanaWalletProvider>
+        <RailWalletBridge>{children}</RailWalletBridge>
+      </SolanaWalletProvider>
+    </EvmWalletProvider>
   );
-
-  const signMessage = useCallback(
-    async (message: string): Promise<string> => {
-      if (!account) throw new Error("Connect a wallet before signing.");
-
-      const feature = getWalletAccountFeature(
-        account,
-        SolanaSignMessage,
-      ) as SolanaSignMessageFeature[typeof SolanaSignMessage] | undefined;
-
-      const messageBytes = new TextEncoder().encode(message);
-
-      if (feature) {
-        const [output] = await feature.signMessage({
-          account: getWalletAccountForUiWalletAccount(account),
-          message: messageBytes,
-        });
-        if (!output?.signature) throw new Error("Wallet returned no signature.");
-        return bytesToBase58(output.signature);
-      }
-
-      // Legacy fallback for window.solana (Phantom / Backpack)
-      const solana = typeof window !== "undefined" ? (window as any).solana : null;
-      if (solana && typeof solana.signMessage === "function") {
-        const res = await solana.signMessage(messageBytes, "utf8");
-        const sigBytes = res.signature || res;
-        return bytesToBase58(sigBytes);
-      }
-
-      throw new Error("Connected wallet does not support cryptographic message signing.");
-    },
-    [account],
-  );
-
-  const value = useMemo<WalletContextValue>(
-    () => ({
-      wallets,
-      account,
-      address: account?.address ?? null,
-      connected: Boolean(account?.address),
-      walletName: account ? getWalletForHandle(account).name : null,
-      walletIcon: account ? getWalletForHandle(account).icon : null,
-      select,
-      disconnect,
-      signAndSendBase64,
-      signMessage,
-    }),
-    [wallets, account, select, disconnect, signAndSendBase64, signMessage],
-  );
-
-  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
 export function useWallet(): WalletContextValue {
@@ -210,3 +141,13 @@ export function useWallet(): WalletContextValue {
   if (!context) throw new Error("useWallet must be used inside <TenderWalletProvider>");
   return context;
 }
+
+/**
+ * The Solana provider, reachable regardless of the active rail.
+ *
+ * Only the wallet modal needs this: connecting a Solana wallet goes through
+ * Wallet Standard's per-wallet `useConnect`, which the neutral interface cannot
+ * express.
+ */
+export { useSolanaWallet } from "@/lib/wallet/solana-wallet";
+export type { EvmTxRequest } from "@/lib/wallet/evm-wallet";

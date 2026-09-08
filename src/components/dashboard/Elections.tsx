@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import ModulePage from "@/components/dashboard/ModulePage";
 import AssetPickerModal from "@/components/dashboard/AssetPickerModal";
 import { ChevronDown } from "lucide-react";
-import { useHandle, useUpdateElections } from "@/hooks/useTender";
+import { useHandle, useRailProfile, useUpdateElections } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
-import type { SolanaTokenInfo } from "@/types/tender";
+import type { RailToken } from "@/types/rail";
 
 interface ElectionRow {
   id: number;
@@ -16,6 +16,7 @@ interface ElectionRow {
 }
 
 export default function Elections() {
+  const profile = useRailProfile();
   const { handle } = useTenderSession();
   const { address: wallet } = useWallet();
   const { data, isLoading, error } = useHandle(handle);
@@ -34,7 +35,7 @@ export default function Elections() {
       data.elections.map((election) => ({
         id: nextId.current++,
         symbol: election.symbol,
-        mint: election.mint,
+        mint: election.address || (election as any).mint || "",
         pct: Math.round(election.basisPoints / 100),
       })),
     );
@@ -57,9 +58,9 @@ export default function Elections() {
     touch();
   };
 
-  const setAsset = (id: number, token: SolanaTokenInfo) => {
+  const setAsset = (id: number, token: RailToken) => {
     setRows((rs) =>
-      rs.map((r) => (r.id === id ? { ...r, symbol: token.symbol, mint: token.mint } : r)),
+      rs.map((r) => (r.id === id ? { ...r, symbol: token.symbol, mint: token.address } : r)),
     );
     touch();
   };
@@ -81,6 +82,7 @@ export default function Elections() {
       ownerWallet: wallet ?? undefined,
       elections: rows.map((r) => ({
         symbol: r.symbol,
+        address: r.mint || undefined,
         mint: r.mint || undefined,
         basisPoints: r.pct * 100,
       })),
@@ -93,7 +95,7 @@ export default function Elections() {
       index="03"
       label="ELECTIONS"
       title="Choose what you hold."
-      blurb="Your election defines how incoming payments settle: which assets, in what proportions. The rail executes the swaps atomically at receipt time."
+      blurb={`Your election defines how incoming payments settle: which assets, in what proportions. The ${profile.network} rail executes the swaps atomically at receipt time.`}
     >
       {!handle && (
         <div className="glass rounded-2xl p-5 md:p-6">

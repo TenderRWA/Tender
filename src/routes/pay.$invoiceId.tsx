@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
 import WalletModal from "@/components/wallet/WalletModal";
+import RailSwitcher from "@/components/dashboard/RailSwitcher";
 import { StatusPill } from "@/components/dashboard/DashTable";
 import { useWallet } from "@/lib/wallet/wallet-context";
+import { useRailProfile } from "@/lib/rail";
 import {
   useInvoice,
   useElectionQuote,
@@ -32,6 +34,7 @@ const truncate = (val: string, len = 12) =>
   val.length > len ? `${val.slice(0, 6)}…${val.slice(-4)}` : val;
 
 function InvoiceCheckoutPage() {
+  const profile = useRailProfile();
   const { invoiceId } = Route.useParams();
   const { address: wallet } = useWallet();
   const [walletModalOpen, setWalletModalOpen] = useState(false);
@@ -42,14 +45,14 @@ function InvoiceCheckoutPage() {
   const invoice = data?.invoice;
   const elections = data?.elections ?? [];
 
-  // Payment token is strictly locked to the invoice's denomination (USDC or SOL)
-  const payToken = invoice?.tokenSymbol?.toUpperCase() === "SOL" ? "SOL" : "USDC";
+  // Payment token is denominated by the invoice or rail default
+  const payToken = invoice?.tokenSymbol || profile.defaultPayToken;
 
   // Quote the invoice amount into the recipient's portfolio
   const amountToPay = invoice ? Number(invoice.amount) : 0;
   const quote = useElectionQuote({
     recipientHandle: invoice?.recipientHandle ?? "",
-    fromSymbolOrMint: payToken,
+    fromSymbolOrAddress: invoice?.tokenAddress || payToken,
     amountIn: amountToPay,
     userWallet: wallet || undefined,
   });
@@ -63,9 +66,9 @@ function InvoiceCheckoutPage() {
     invoice?.status === "expired" ||
     Boolean(invoice?.expiresAt && new Date(invoice.expiresAt) < new Date());
   const isPaid = invoice?.status === "paid" || Boolean(settledTx);
-  const activeSignature = settledTx || invoice?.signature;
+  const activeSignature = settledTx || invoice?.txId;
 
-  const hasLegs = Boolean(quote.data?.portfolioResult?.legs?.length);
+  const hasLegs = Boolean(quote.data?.legs?.length);
   const canPay = Boolean(wallet) && !isPaid && !isExpired && !settle.isPending && hasLegs;
 
   const handlePay = () => {
@@ -83,11 +86,11 @@ function InvoiceCheckoutPage() {
       },
       {
         onSuccess: (result) => {
-          const sig = result.signatures[0] || "confirmed";
+          const sig = result.txIds[0] || "confirmed";
           setSettledTx(sig);
           confirm.mutate({
             id: invoiceId,
-            signature: sig,
+            txId: sig,
             payerWallet: wallet ?? undefined,
           });
         },
@@ -153,6 +156,7 @@ function InvoiceCheckoutPage() {
         </Link>
 
         <div className="flex items-center gap-3">
+          <RailSwitcher />
           <span className="font-mono text-xs text-muted2">
             ID: <span className="text-foreground">{truncate(invoice.id, 16)}</span>
           </span>
@@ -251,7 +255,7 @@ function InvoiceCheckoutPage() {
                 RECEIVE-SIDE PORTFOLIO SLICING
               </span>
               <span className="font-mono text-[10px] text-muted2">
-                Atomic Jupiter + Relay
+                Atomic {profile.venueLabel}
               </span>
             </div>
 
@@ -262,11 +266,13 @@ function InvoiceCheckoutPage() {
             {/* Legs List */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {elections.map((ele) => {
-                const matchingLeg = quote.data?.portfolioResult?.legs?.find(
-                  (l) => l.assetSymbol === ele.symbol
+                const matchingLeg = quote.data?.legs?.find(
+                  (l) =>
+                    l.assetSymbol === ele.symbol ||
+                    (ele.address && l.assetAddress?.toLowerCase() === ele.address.toLowerCase())
                 );
                 const outAmt = matchingLeg
-                  ? parseFloat(matchingLeg.quote.outAmountFormatted || "0")
+                  ? parseFloat(matchingLeg.quote.amountOutFormatted || "0")
                   : 0;
                 const displayEst =
                   outAmt > 0
@@ -325,7 +331,7 @@ function InvoiceCheckoutPage() {
 
                 <div className="space-y-1">
                   <h3 className="font-display text-xl font-bold text-foreground">
-                    Settled on Solana
+                    Settled on {profile.network}
                   </h3>
                   <p className="font-body text-xs text-muted2 max-w-xs mx-auto">
                     Payment executed and atomically delivered into @{invoice.recipientHandle}'s portfolio.
@@ -335,7 +341,7 @@ function InvoiceCheckoutPage() {
                 {activeSignature && (
                   <div className="p-4 rounded-xl glass-soft border border-hairline/80 space-y-2 text-left">
                     <div className="flex items-center justify-between font-mono text-xs">
-                      <span className="text-muted2">Tx Signature</span>
+                      <span className="text-muted2">{profile.txLabel}</span>
                       <button
                         type="button"
                         onClick={() => copySignature(activeSignature)}
@@ -347,12 +353,12 @@ function InvoiceCheckoutPage() {
                     </div>
 
                     <a
-                      href={`https://solscan.io/tx/${activeSignature}`}
+                      href={profile.explorer.tx(activeSignature)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full mt-2 py-2 px-3 rounded-lg bg-base border border-hairline font-mono text-xs font-semibold text-foreground hover:text-red transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <span>View on Solscan</span>
+                      <span>View on {profile.explorer.name}</span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
@@ -393,11 +399,11 @@ function InvoiceCheckoutPage() {
                   </div>
                   <div className="flex items-center justify-between text-muted2">
                     <span>Routing Protocol</span>
-                    <span className="text-foreground font-semibold">Jupiter + Relay Dual Route</span>
+                    <span className="text-foreground font-semibold">{profile.venueLabel} Route</span>
                   </div>
                   <div className="flex items-center justify-between text-muted2">
                     <span>Network</span>
-                    <span className="text-foreground font-semibold">Solana Mainnet-Beta</span>
+                    <span className="text-foreground font-semibold">{profile.network}</span>
                   </div>
                   <div className="flex items-center justify-between text-muted2">
                     <span>Payer Fee</span>

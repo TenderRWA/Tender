@@ -3,6 +3,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import DashSidebar from "@/components/dashboard/DashSidebar";
 import XAuthGate from "@/components/dashboard/XAuthGate";
 import { useWallet } from "@/lib/wallet/wallet-context";
+import { useRail } from "@/lib/rail";
 import { useXAccount } from "@/hooks/useTender";
 import { CheckCircle2, X } from "lucide-react";
 
@@ -23,7 +24,8 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function DashboardLayout() {
-  const { address, connected } = useWallet();
+  const { address } = useWallet();
+  const rail = useRail();
   const { data: xData, isLoading: isCheckingX } = useXAccount(address);
   const [showSuccessBanner, setShowSuccessBanner] = useState(false);
   const [linkedUser, setLinkedUser] = useState<string | null>(null);
@@ -42,7 +44,8 @@ function DashboardLayout() {
   }, []);
 
   const isWalletConnected = Boolean(address);
-  const isXBound = Boolean(xData?.linked);
+  const isXBound = Boolean((xData?.data?.linked ?? xData?.linked) && !xData?.isDemo);
+  const isGated = rail === "solana" ? isWalletConnected && !isXBound : false;
 
   return (
     <div className="dash-aurora">
@@ -54,7 +57,7 @@ function DashboardLayout() {
               <CheckCircle2 className="w-5 h-5 shrink-0" />
               <div className="text-sm">
                 <span className="font-semibold">𝕏 Account Verified!</span>{" "}
-                {linkedUser ? `@${linkedUser}` : "Your 𝕏 account"} is now permanently bound to your Solana wallet. Terminal unlocked.
+                {linkedUser ? `@${linkedUser}` : "Your 𝕏 account"} is now permanently bound to your connected wallet. Terminal unlocked.
               </div>
             </div>
             <button
@@ -69,12 +72,12 @@ function DashboardLayout() {
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-start">
           <DashSidebar />
           <div className="flex-1 min-w-0 w-full">
-            {isWalletConnected && isCheckingX ? (
+            {isWalletConnected && isCheckingX && rail === "solana" ? (
               <div className="py-20 text-center space-y-3">
                 <div className="w-8 h-8 mx-auto border-2 border-white/20 border-t-white rounded-full animate-spin" />
                 <p className="text-xs font-mono text-muted2">Verifying 𝕏 authorization status...</p>
               </div>
-            ) : isWalletConnected && !isXBound ? (
+            ) : isGated ? (
               <XAuthGate wallet={address!} />
             ) : (
               <Outlet />

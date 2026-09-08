@@ -35,7 +35,9 @@ import {
   useTransferNft,
   type SettlementLegResult,
 } from "@/hooks/useTender";
-import type { NftMetadata, PendingSettlementRecord } from "@/types/tender";
+import { useRailProfile, useRailStore } from "@/lib/rail";
+import type { RailPendingSettlement, RailInvoice } from "@/types/rail";
+import type { NftMetadata } from "@/types/tender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
 
@@ -62,41 +64,43 @@ const formatAmount = (amt: string | number) => {
  * Collectible requests are flagged two ways by the bot — an explicit
  * `assetType` and the legacy `inputToken: "NFT"`. Accept both.
  */
-const isNftSettlement = (s: PendingSettlementRecord) =>
+const isNftSettlement = (s: RailPendingSettlement) =>
   s.assetType === "nft" || s.inputToken?.toUpperCase() === "NFT";
 
 /**
- * Best available identity for the collectible on a pending row. The bot embeds
- * name and image in `portfolioSummary`; when it doesn't, resolve the mint.
+ * Best available identity for the collectible on a pending row.
  */
-function useSettlementNft(settlement: PendingSettlementRecord) {
+function useSettlementNft(settlement: RailPendingSettlement) {
   const summary =
     settlement.portfolioSummary?.find((p) => p.isNft) ?? settlement.portfolioSummary?.[0];
-  const mint = settlement.tokenMint || summary?.mint || "";
+  const address = settlement.tokenAddress || summary?.address || "";
+  const tokenId = settlement.tokenId;
   const embedded = Boolean(summary?.name && summary?.image);
 
-  const query = useNftMetadata(embedded ? null : mint);
+  const query = useNftMetadata(embedded ? null : address ? { address, tokenId } : null);
 
   const nft: NftMetadata = {
-    mint,
-    name: query.data?.nft?.name || summary?.name || "",
-    symbol: query.data?.nft?.symbol || (summary?.symbol === "NFT" ? "" : summary?.symbol) || "",
-    image: query.data?.nft?.image || summary?.image,
+    mint: address,
+    name: query.data?.name || summary?.name || "",
+    symbol: query.data?.symbol || (summary?.symbol === "NFT" ? "" : summary?.symbol) || "",
+    image: query.data?.image || summary?.image,
   };
 
-  return { nft, isLoading: query.isLoading, hasMint: Boolean(mint) };
+  return { nft, isLoading: query.isLoading, hasMint: Boolean(address) };
 }
 
 type FilterTab = "all" | "x_bot" | "invoices";
 
 export default function Pending() {
+  const profile = useRailProfile();
+  const rail = useRailStore((s) => s.activeRail);
   const { handle } = useTenderSession();
   const { address: wallet } = useWallet();
   const dismiss = useDismissPendingSettlement();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
-  const [selectedSettlement, setSelectedSettlement] = useState<PendingSettlementRecord | null>(null);
-  const [settlementToDismiss, setSettlementToDismiss] = useState<PendingSettlementRecord | null>(null);
+  const [selectedSettlement, setSelectedSettlement] = useState<RailPendingSettlement | null>(null);
+  const [settlementToDismiss, setSettlementToDismiss] = useState<RailPendingSettlement | null>(null);
   const [dismissSuccessModal, setDismissSuccessModal] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
 
@@ -107,8 +111,12 @@ export default function Pending() {
     handle: handle || undefined,
     status: "all",
   });
-  const botSettlements = (botData?.pendingSettlements ?? []).filter(
-    (s) => s.status !== "dismissed" && (isNftEnabled || !isNftSettlement(s)),
+  const botSettlements = (
+    Array.isArray(botData)
+      ? botData
+      : (botData as { pendingSettlements?: RailPendingSettlement[] })?.pendingSettlements ?? []
+  ).filter(
+    (s: RailPendingSettlement) => s.status !== "dismissed" && (isNftEnabled || !isNftSettlement(s)),
   );
 
   // 2. Fetch pending invoices
@@ -116,10 +124,10 @@ export default function Pending() {
     handle: handle || undefined,
     wallet: wallet || undefined,
   });
-  const invoices = (invData?.invoices ?? []).filter((i) => i.status === "pending");
+  const invoices = (invData?.data ?? []).filter((i: RailInvoice) => i.status === "pending");
 
   // Summary stats
-  const activePendingBot = botSettlements.filter((s) => s.status === "pending");
+  const activePendingBot = botSettlements.filter((s: RailPendingSettlement) => s.status === "pending");
   const totalActivePending = activePendingBot.length + invoices.length;
 
   return (
@@ -479,10 +487,11 @@ function BotSettlementRow({
   onDismiss,
   onReview,
 }: {
-  settlement: PendingSettlementRecord;
+  settlement: RailPendingSettlement;
   onDismiss: () => void;
   onReview: () => void;
 }) {
+  const profile = useRailProfile();
   const isNft = isNftSettlement(s);
   const { nft } = useSettlementNft(s);
 
@@ -565,14 +574,14 @@ function BotSettlementRow({
 
       <DashCell className="text-right">
         {s.status === "completed" ? (
-          s.signature ? (
+          s.txId || s.signature ? (
             <a
-              href={`https://solscan.io/tx/${s.signature}`}
+              href={profile.explorer.tx(s.txId || s.signature || "")}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 font-mono text-xs text-success hover:underline"
             >
-              <span>Tx: {truncate(s.signature, 8)}</span>
+              <span>Tx: {truncate(s.txId || s.signature || "", 8)}</span>
               <ExternalLink className="w-3 h-3" />
             </a>
           ) : (
@@ -611,10 +620,12 @@ function SettlementSignModal({
   onClose,
   onOpenWallet,
 }: {
-  settlement: PendingSettlementRecord;
+  settlement: RailPendingSettlement;
   onClose: () => void;
   onOpenWallet: () => void;
 }) {
+  const profile = useRailProfile();
+  const rail = useRailStore((s) => s.activeRail);
   const queryClient = useQueryClient();
   const { address: wallet } = useWallet();
   const settle = useSettlePortfolio();
@@ -629,17 +640,16 @@ function SettlementSignModal({
   const [modalError, setModalError] = useState<string | null>(null);
 
   // Quote the transaction. A collectible is delivered 1:1 and never routed
-  // through a DEX, so the quote engine is left out of the flow entirely -
-  // passing no handle keeps the query disabled rather than merely ignored.
+  // through a DEX, so the quote engine is left out of the flow entirely.
   const amountNum = parseFloat(settlement.inputAmount) || 0;
   const quote = useElectionQuote({
     recipientHandle: isNft ? undefined : settlement.recipientHandle,
-    fromSymbolOrMint: settlement.inputToken || "USDC",
+    fromSymbolOrAddress: settlement.tokenAddress || settlement.inputToken || profile.defaultPayToken,
     amountIn: isNft ? 0 : amountNum,
     userWallet: wallet || undefined,
   });
 
-  const hasLegs = Boolean(quote.data?.portfolioResult?.legs?.length);
+  const hasLegs = Boolean(quote.data?.legs?.length);
   const isWorking = settle.isPending || transferNft.isPending;
   const canSettle = isNft
     ? Boolean(wallet) && !isWorking && hasMint
@@ -649,8 +659,8 @@ function SettlementSignModal({
   const onSettled = (signature: string, legs: SettlementLegResult[] | null) => {
     setConfirmedTx(signature);
     setCompletedLegs(legs);
-    confirm.mutate({ id: settlement.id, signature, payerWallet: wallet || undefined });
-    queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
+    confirm.mutate({ id: settlement.id, txId: signature, payerWallet: wallet || undefined });
+    queryClient.invalidateQueries({ queryKey: ["tender", rail, "pending-settlements"] });
   };
 
   const handleSign = () => {
@@ -665,12 +675,15 @@ function SettlementSignModal({
       transferNft.mutate(
         {
           userWallet: wallet,
-          nftMint: nft.mint,
+          nft: {
+            address: nft.mint,
+            tokenId: settlement.tokenId,
+          },
           recipientTag: settlement.recipientHandle,
           recipientWallet: settlement.recipientWallet || undefined,
         },
         {
-          onSuccess: (result) => onSettled(result.signature, null),
+          onSuccess: (result) => onSettled(result.txId, null),
           onError: (err) => setModalError(err.message || "Failed to transfer collectible"),
         },
       );
@@ -685,7 +698,7 @@ function SettlementSignModal({
         recipientHandle: settlement.recipientHandle,
       },
       {
-        onSuccess: (result) => onSettled(result.signatures[0] || "confirmed", result.legs),
+        onSuccess: (result) => onSettled(result.txIds[0] || "confirmed", result.legs),
         onError: (err) => setModalError(err.message || "Failed to settle transaction"),
       }
     );
@@ -732,13 +745,13 @@ function SettlementSignModal({
               <p className="font-body text-xs text-muted2 max-w-sm mx-auto">
                 {isNft ? (
                   <>
-                    Transferred 1:1 into @{settlement.recipientHandle}&apos;s wallet on Solana. No
+                    Transferred 1:1 into @{settlement.recipientHandle}&apos;s wallet on {profile.network}. No
                     DEX selling, no election slicing.
                   </>
                 ) : (
                   <>
                     Atomic legs settled into @{settlement.recipientHandle}&apos;s elected portfolio
-                    directly on Solana.
+                    directly on {profile.network}.
                   </>
                 )}
               </p>
@@ -775,7 +788,7 @@ function SettlementSignModal({
                       <span className="text-foreground font-medium">{leg.symbol}</span>
                       {leg.signature ? (
                         <a
-                          href={`https://solscan.io/tx/${leg.signature}`}
+                          href={profile.explorer.tx(leg.signature)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-success hover:underline flex items-center gap-1 font-semibold"
@@ -793,7 +806,7 @@ function SettlementSignModal({
                 <div className="flex items-center justify-between text-xs font-mono pt-2 border-t border-hairline/60">
                   <span className="text-muted2">Transaction Hash</span>
                   <a
-                    href={`https://solscan.io/tx/${confirmedTx}`}
+                    href={profile.explorer.tx(confirmedTx)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-success hover:underline flex items-center gap-1 font-semibold"
@@ -808,7 +821,7 @@ function SettlementSignModal({
             <button
               type="button"
               onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ["tender", "pending-settlements"] });
+                queryClient.invalidateQueries({ queryKey: ["tender", rail, "pending-settlements"] });
                 onClose();
               }}
               className="w-full py-3.5 rounded-xl bg-foreground text-background font-body font-semibold text-xs uppercase tracking-[0.1em] hover:bg-foreground/90 transition-all cursor-pointer"
@@ -886,7 +899,7 @@ function SettlementSignModal({
                   Portfolio Settlement Breakdown
                 </span>
                 <span className="font-mono text-[10px] text-muted2">
-                  {quote.isFetching ? "Quoting DEX order books…" : "Live Jupiter & Relay Route"}
+                  {quote.isFetching ? "Quoting DEX order books…" : `Live ${profile.venueLabel} Route`}
                 </span>
               </div>
 
@@ -903,8 +916,8 @@ function SettlementSignModal({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {quote.data?.portfolioResult?.legs?.map((leg, idx) => {
-                    const outAmt = parseFloat(leg.quote.outAmountFormatted || "0");
+                  {quote.data?.legs?.map((leg, idx) => {
+                    const outAmt = parseFloat(leg.quote.amountOutFormatted || "0");
                     const displayAmt =
                       outAmt < 0.0001
                         ? `~${outAmt.toPrecision(2)}`
@@ -959,7 +972,7 @@ function SettlementSignModal({
               {isWorking ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  <span>{isNft ? "Transferring on Solana…" : "Signing & Settling on Solana…"}</span>
+                  <span>{isNft ? `Transferring on ${profile.network}…` : `Signing & Settling on ${profile.network}…`}</span>
                 </>
               ) : !wallet ? (
                 isNft ? (
@@ -989,3 +1002,4 @@ function SettlementSignModal({
     </div>
   );
 }
+

@@ -166,28 +166,52 @@ authRouter.get("/x/account", async (req: Request, res: Response) => {
     }
 
     const result = await query(
-      "SELECT wallet_address, x_user_id, x_username, linked_at FROM x_accounts WHERE wallet_address = $1",
+      "SELECT wallet_address, x_user_id, x_username, linked_at FROM x_accounts WHERE LOWER(wallet_address) = LOWER($1)",
       [wallet]
     );
 
-    if (!result.rows || result.rows.length === 0) {
+    if (result.rows && result.rows.length > 0) {
+      const row = result.rows[0];
       res.json({
-        linked: false,
-        account: null,
+        linked: true,
+        account: {
+          walletAddress: row.wallet_address,
+          xUserId: row.x_user_id,
+          xUsername: row.x_username,
+          linkedAt: row.linked_at,
+        },
       });
       return;
     }
 
-    const row = result.rows[0];
+    // Also check handles table for handle claimed by this wallet with an X username or metadata
+    const handleResult = await query(
+      "SELECT owner_wallet, x_user_id, x_username, metadata, updated_at FROM handles WHERE LOWER(owner_wallet) = LOWER($1) ORDER BY updated_at DESC LIMIT 1",
+      [wallet]
+    );
+
+    if (handleResult.rows && handleResult.rows.length > 0) {
+      const hRow = handleResult.rows[0];
+      const xUsername = hRow.x_username || hRow.metadata?.xUsername || hRow.metadata?.xHandle;
+      if (xUsername) {
+        res.json({
+          linked: true,
+          account: {
+            walletAddress: hRow.owner_wallet,
+            xUserId: hRow.x_user_id || "verified",
+            xUsername: String(xUsername).replace(/^@/, ""),
+            linkedAt: hRow.updated_at,
+          },
+        });
+        return;
+      }
+    }
+
     res.json({
-      linked: true,
-      account: {
-        walletAddress: row.wallet_address,
-        xUserId: row.x_user_id,
-        xUsername: row.x_username,
-        linkedAt: row.linked_at,
-      },
+      linked: false,
+      account: null,
     });
+    return;
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch linked X account", details: err.message });
   }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@/lib/router-compat";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
+import RailSwitcher from "@/components/dashboard/RailSwitcher";
 import { useHandleAvailability, useOwnerHandles } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
@@ -32,7 +33,7 @@ export default function TerminalControls() {
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const { data: ownerData } = useOwnerHandles(address);
-  const ownedHandles = ownerData?.handles || [];
+  const ownedHandles = ownerData?.data || ownerData?.handles || [];
 
   // Auto-activate the first owned handle when wallet connects if no handle or mismatch
   useEffect(() => {
@@ -102,6 +103,7 @@ export default function TerminalControls() {
 
   return (
     <div className="flex items-center gap-3">
+      <RailSwitcher />
       <div ref={popoverRef} className="relative">
         <button
           type="button"

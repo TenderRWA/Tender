@@ -3,14 +3,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Check, Sparkles, Globe } from "lucide-react";
 import { getLenis } from "@/lib/lenis";
 import { useAssets } from "@/hooks/useTender";
-import type { SolanaTokenInfo } from "@/types/tender";
+import { useRailProfile } from "@/lib/rail";
+import type { RailToken } from "@/types/rail";
 
 export interface AssetPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (token: SolanaTokenInfo) => void;
+  onSelect: (token: RailToken) => void;
   currentSymbol?: string;
-  initialAssets?: SolanaTokenInfo[];
+  initialAssets?: RailToken[];
 }
 
 export default function AssetPickerModal({
@@ -20,15 +21,16 @@ export default function AssetPickerModal({
   currentSymbol,
   initialAssets,
 }: AssetPickerModalProps) {
+  const profile = useRailProfile();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"featured" | "all">("featured");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load full asset catalog (714+ assets) from API
+  // Load full asset catalog from API
   const { data: assetData, isLoading } = useAssets({ limit: 1000 });
 
-  // Featured list: Base currencies + Featured xStocks
-  const featuredList = useMemo<SolanaTokenInfo[]>(() => {
+  // Featured list: Base currencies + Featured equities
+  const featuredList = useMemo<RailToken[]>(() => {
     if (!assetData) return (initialAssets || []).slice(0, 10);
     const list = [
       ...(assetData.baseCurrencies || []),
@@ -36,23 +38,25 @@ export default function AssetPickerModal({
     ];
     const seen = new Set<string>();
     return list.filter((item) => {
-      if (!item?.mint || seen.has(item.mint)) return false;
-      seen.add(item.mint);
+      const key = item?.address || item?.symbol;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
   }, [assetData, initialAssets]);
 
-  // All assets list: Base currencies + All 714+ xStocks
-  const allAssets = useMemo<SolanaTokenInfo[]>(() => {
+  // All assets list: Base currencies + All equities
+  const allAssets = useMemo<RailToken[]>(() => {
     if (!assetData) return initialAssets || [];
     const merged = [
       ...(assetData.baseCurrencies || []),
-      ...(assetData.assets || assetData.featured || []),
+      ...(assetData.all || assetData.featured || []),
     ];
     const seen = new Set<string>();
     return merged.filter((item) => {
-      if (!item?.mint || seen.has(item.mint)) return false;
-      seen.add(item.mint);
+      const key = item?.address || item?.symbol;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
   }, [assetData, initialAssets]);
@@ -68,7 +72,7 @@ export default function AssetPickerModal({
           a.symbol.toLowerCase().includes(q) ||
           a.name.toLowerCase().includes(q) ||
           (a.underlyingTicker && a.underlyingTicker.toLowerCase().includes(q)) ||
-          a.mint.toLowerCase() === q
+          (a.address && a.address.toLowerCase() === q)
       );
     }
 
@@ -132,8 +136,8 @@ export default function AssetPickerModal({
                 </h3>
                 <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 mt-0.5">
                   {allAssets.length > 0
-                    ? `${allAssets.length} Solana Tokenized Stocks & Base Currencies`
-                    : "714+ Solana Tokenized Stocks & Base Currencies"}
+                    ? `${allAssets.length} ${profile.network} Tokenized Equities & Base Currencies`
+                    : `${profile.network} Verified Assets`}
                 </p>
               </div>
               <button
@@ -221,7 +225,7 @@ export default function AssetPickerModal({
                   const isSelected = token.symbol === currentSymbol;
                   return (
                     <button
-                      key={token.mint || token.symbol}
+                      key={token.address || token.symbol}
                       type="button"
                       onClick={() => {
                         onSelect(token);

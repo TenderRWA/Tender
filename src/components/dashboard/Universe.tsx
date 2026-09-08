@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 
 import ModulePage from "@/components/dashboard/ModulePage";
 import DashTable, { DashRow, DashCell, StatusPill } from "@/components/dashboard/DashTable";
-import { useAssets } from "@/hooks/useTender";
+import { useAssets, useRailProfile } from "@/hooks/useTender";
 
-const truncateMint = (mint: string) =>
-  mint.length > 12 ? `${mint.slice(0, 4)}…${mint.slice(-4)}` : mint;
+const truncateAddress = (addr: string) =>
+  addr && addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr || "—";
 
 export default function Universe() {
+  const profile = useRailProfile();
   const [query, setQuery] = useState("");
   const { data, isLoading, error } = useAssets({ q: query.trim(), limit: 60 });
 
@@ -16,22 +17,22 @@ export default function Universe() {
 
   const rows = useMemo(() => {
     if (!data) return [];
-    const catalog = data.assets ?? featured;
+    const catalog = data.all ?? [...baseCurrencies, ...featured];
     const seen = new Set<string>();
-    return [...baseCurrencies, ...catalog].filter((token) => {
-      if (!token?.mint || seen.has(token.mint)) return false;
-      seen.add(token.mint);
+    return catalog.filter((token) => {
+      const key = token?.address || token?.symbol;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [data, baseCurrencies, featured]);
 
   return (
     <ModulePage
       index="06"
       label="UNIVERSE"
       title="The eligible universe."
-      blurb="Assets admitted for election settlement. Admission requires minimum on-chain depth, a live oracle feed and a working safe-settle path to USDC."
+      blurb={`Assets admitted for election settlement on ${profile.network}. Admission requires live pool depth on ${profile.venueLabel} and a working safe-settle path to ${profile.defaultPayToken}.`}
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
         <div className="glass glass-interactive rounded-2xl p-5 md:p-6 transition-all duration-200 ">
@@ -46,7 +47,7 @@ export default function Universe() {
         <div className="glass glass-interactive rounded-2xl p-5 md:p-6 transition-all duration-200 ">
           <span className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
             <span className="w-1.5 h-1.5 bg-warning shrink-0" aria-hidden />
-            FEATURED XSTOCKS
+            {profile.id === "solana" ? "FEATURED XSTOCKS" : "FEATURED EQUITIES"}
           </span>
           <p className="mt-3 font-mono font-medium text-4xl text-warning">{featured.length}</p>
         </div>
@@ -64,7 +65,7 @@ export default function Universe() {
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search the registry — apple, NVDA, tesla, mint address…"
+        placeholder={`Search the registry — SPCX, NVDA, AAPL, ${profile.addressLabel.toLowerCase()}…`}
         aria-label="Search the asset registry"
         className="w-full glass-soft rounded-xl px-4 py-3 font-body text-sm text-foreground placeholder:text-muted2 focus:outline-none focus:border-red focus:ring-2 focus:ring-red/25 transition-all duration-150"
       />
@@ -77,13 +78,21 @@ export default function Universe() {
 
       <DashTable
         caption={`ELIGIBLE ASSETS · ${rows.length}${isLoading ? " · LOADING" : ""}`}
-        columns={["Mint", "Symbol", "Name", "Underlying", "Decimals", "Class"]}
+        columns={[profile.addressLabel, "Symbol", "Name", "Underlying", "Decimals", "Class"]}
         minWidth="min-w-[720px]"
       >
         {rows.map((token) => (
-          <DashRow key={token.mint}>
+          <DashRow key={token.address || token.symbol}>
             <DashCell className="font-mono text-xs text-muted2">
-              {truncateMint(token.mint)}
+              <a
+                href={profile.explorer.token(token.address)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-red transition-colors"
+                title={token.address}
+              >
+                {truncateAddress(token.address)}
+              </a>
             </DashCell>
             <DashCell className="font-mono text-sm text-red">{token.symbol}</DashCell>
             <DashCell className="text-foreground">{token.name}</DashCell>
@@ -94,7 +103,7 @@ export default function Universe() {
             <DashCell>
               <StatusPill
                 tone={token.isBaseCurrency || token.isNative ? "muted" : "success"}
-                label={token.isBaseCurrency || token.isNative ? "base" : "eligible"}
+                label={token.isBaseCurrency || token.isNative ? "base" : token.assetType || "eligible"}
               />
             </DashCell>
           </DashRow>
@@ -102,8 +111,8 @@ export default function Universe() {
       </DashTable>
 
       <p className="font-body text-sm text-muted2 max-w-2xl">
-        Suspended assets stay payable: incoming payments earmarked for them safe-settle to USDC
-        until depth and oracle health are restored.
+        Suspended assets stay payable: incoming payments earmarked for them safe-settle to {profile.defaultPayToken}
+        until depth and venue health are restored.
       </p>
     </ModulePage>
   );

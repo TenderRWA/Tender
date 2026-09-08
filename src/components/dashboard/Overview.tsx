@@ -1,12 +1,12 @@
 import ModulePage from "@/components/dashboard/ModulePage";
 import StatCard from "@/components/dashboard/StatCard";
 import DashTable, { DashCell, DashRow, StatusPill } from "@/components/dashboard/DashTable";
-import { useHandle } from "@/hooks/useTender";
+import { useHandle, useRailProfile } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
 
 const truncate = (value: string) =>
-  value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
+  value && value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value || "—";
 
 const formatDate = (iso: string) => {
   const d = new Date(iso);
@@ -24,12 +24,10 @@ function Notice({ title, body }: { title: string; body: string }) {
 }
 
 /**
- * Overview: the connected handle's live registration and allocation, read from
- * GET /api/v1/handles/:handle. Everything here comes off that response — the
- * rail has no aggregate or history endpoint, so nothing is summarised across
- * handles and no figure on this page is synthesised.
+ * Overview: the connected handle's live registration and allocation.
  */
 export default function Overview() {
+  const profile = useRailProfile();
   const { handle } = useTenderSession();
   const { address: wallet } = useWallet();
   const { data, isLoading, error } = useHandle(handle);
@@ -123,16 +121,25 @@ export default function Overview() {
       {data && elections.length > 0 && (
         <DashTable
           caption="TARGET ALLOCATION"
-          columns={["Asset", "Mint", "Basis points", "Share"]}
+          columns={["Asset", profile.addressLabel, "Basis points", "Share"]}
           minWidth="min-w-[560px]"
         >
           {elections.map((election) => {
             const pct = election.basisPoints / 100;
+            const addr = election.address || (election as any).mint || "";
             return (
-              <DashRow key={election.mint || election.symbol}>
+              <DashRow key={addr || election.symbol}>
                 <DashCell className="text-foreground">{election.symbol}</DashCell>
                 <DashCell className="font-mono text-xs text-muted2">
-                  <span title={election.mint}>{truncate(election.mint)}</span>
+                  <a
+                    href={profile.explorer.token(addr)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-red transition-colors"
+                    title={addr}
+                  >
+                    {truncate(addr)}
+                  </a>
                 </DashCell>
                 <DashCell className="font-mono text-xs">{election.basisPoints}</DashCell>
                 <DashCell className="font-mono text-xs text-foreground">

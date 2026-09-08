@@ -8,6 +8,7 @@ import {
   useAssets,
   useElectionQuote,
   useIsNftEnabled,
+  useRailProfile,
   useSettlePortfolio,
   useSettlementHistory,
 } from "@/hooks/useTender";
@@ -164,6 +165,7 @@ function ModeSwitcher({
 }
 
 export default function Payments() {
+  const profile = useRailProfile();
   const { address: wallet } = useWallet();
   const { data: assets } = useAssets({ featured: true });
   const payTokens = (assets?.baseCurrencies ?? []).map((t) => t.symbol);
@@ -171,9 +173,16 @@ export default function Payments() {
 
   const [mode, setMode] = useState<ComposerMode>("token");
   const [handle, setHandle] = useState("");
-  const [token, setToken] = useState("USDC");
-  const [amount, setAmount] = useState("1000");
+  const [token, setToken] = useState(profile.defaultPayToken);
+  const [amount, setAmount] = useState("100");
   const [log, setLog] = useState<SettlementRecord[]>([]);
+
+  // Update payment token when switching rails if current token isn't valid for this rail
+  useEffect(() => {
+    if (payTokens.length && !payTokens.includes(token)) {
+      setToken(profile.defaultPayToken);
+    }
+  }, [profile.defaultPayToken, payTokens, token]);
 
   const debouncedHandle = useDebounced(handle);
   const debouncedAmount = useDebounced(amount);
@@ -185,7 +194,7 @@ export default function Payments() {
   const quote = useElectionQuote({
     recipientHandle:
       activeMode === "token" && debouncedHandle.trim().length > 1 ? debouncedHandle : undefined,
-    fromSymbolOrMint: token,
+    fromSymbolOrAddress: token,
     amountIn: debouncedAmount,
     userWallet: wallet || undefined,
   });
@@ -215,9 +224,9 @@ export default function Payments() {
     );
   };
 
-  const legs = quote.data?.portfolioResult.legs ?? [];
+  const legs = quote.data?.legs ?? [];
 
-  // Merge session receipts with verified on-chain history from PostgreSQL
+  // Merge session receipts with verified on-chain history
   const allReceipts = useMemo(() => {
     const combined: Array<{
       id: string;
@@ -230,43 +239,42 @@ export default function Payments() {
 
     for (const item of log) {
       combined.push({
-        id: `session-${item.signature || Math.random()}`,
+        id: `session-${item.txId || Math.random()}`,
         handle: item.handle,
         symbol: item.symbol,
-        signature: item.signature,
-        status: item.signature ? "confirmed" : "skipped",
+        signature: item.txId,
+        status: item.txId ? "confirmed" : "skipped",
         time: item.at,
       });
     }
 
-    if (historyData?.settlements) {
-      for (const item of historyData.settlements) {
-        if (!combined.some((c) => c.signature && c.signature === item.signature)) {
-          const symbol = item.outputBreakdown?.[0]?.symbol || "RWA";
-          combined.push({
-            id: String(item.id),
-            handle: item.recipientHandle || "receiver",
-            symbol,
-            signature: item.signature,
-            status: item.status === "confirmed" ? "confirmed" : "skipped",
-            time: new Date(item.createdAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          });
-        }
+    const historyItems = historyData?.data ?? [];
+    for (const item of historyItems) {
+      if (!combined.some((c) => c.signature && c.signature === item.txId)) {
+        const symbol = item.outputBreakdown?.[0]?.symbol || "RWA";
+        combined.push({
+          id: String(item.id),
+          handle: item.recipientHandle || "receiver",
+          symbol,
+          signature: item.txId,
+          status: item.status === "confirmed" ? "confirmed" : "skipped",
+          time: new Date(item.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        });
       }
     }
 
     return combined;
-  }, [log, historyData?.settlements]);
+  }, [log, historyData?.data]);
 
   return (
     <ModulePage
       index="02"
       label="PAYMENTS"
       title="Pay any handle."
-      blurb="Send USDC or SOL to any registered handle. The router quotes both Jupiter and Relay in parallel, takes the winning price for each leg, and settles the entire elected mix."
+      blurb={`Send ${profile.defaultPayToken} or ${profile.nativeSymbol} to any registered handle. The router quotes ${profile.venueLabel} pools on ${profile.network}, and settles the entire elected mix.`}
     >
       {isNftEnabled && (
         <div className="mt-8">
@@ -387,7 +395,7 @@ export default function Payments() {
                   className="flex items-center gap-2.5 font-mono text-xs uppercase tracking-[0.12em] text-foreground"
                 >
                   <SettledCheck />
-                  {settle.data.signatures.length} LEG(S) SETTLED · RECORDED ON THE RAIL
+                  {settle.data?.txIds?.length ?? (settle.data as any)?.signatures?.length ?? 0} LEG(S) SETTLED · RECORDED ON THE RAIL
                 </motion.p>
               )}
             </AnimatePresence>
@@ -409,7 +417,7 @@ export default function Payments() {
 
           {quote.isFetching && (
             <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 animate-pulse">
-              DUAL-QUOTING JUPITER + RELAY…
+              QUOTING VIA {profile.venueLabel.toUpperCase()}…
             </p>
           )}
 
@@ -429,7 +437,7 @@ export default function Payments() {
               <div className="flex flex-col">
                 {legs.map((leg) => (
                   <div
-                    key={leg.assetMint}
+                    key={leg.assetAddress || leg.assetSymbol}
                     className="flex items-center justify-between gap-3 border-b border-hairline/60 last:border-b-0 py-3.5"
                   >
                     <span className="flex items-center gap-2.5 min-w-0">
@@ -439,11 +447,11 @@ export default function Payments() {
                         {leg.basisPoints / 100}%
                       </span>
                       <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-                        via {leg.quote.winner}
+                        via {leg.quote.venue || (leg.quote as any).winner || profile.venueLabel}
                       </span>
                     </span>
                     <span className="font-mono text-sm tabular-nums text-secondary2">
-                      {leg.quote.outAmountFormatted}
+                      {leg.quote.amountOutFormatted || (leg.quote as any).outAmountFormatted}
                     </span>
                   </div>
                 ))}
@@ -453,7 +461,7 @@ export default function Payments() {
                   TOTAL IN
                 </span>
                 <span className="font-mono text-sm tabular-nums text-foreground">
-                  {quote.data.portfolioResult.totalInAmountFormatted} {token}
+                  {quote.data.totalInAmountFormatted || (quote.data as any).portfolioResult?.totalInAmountFormatted} {token}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -461,18 +469,18 @@ export default function Payments() {
                   RECEIVER WALLET
                 </span>
                 <span className="font-mono text-xs tabular-nums text-secondary2">
-                  {quote.data.recipientWallet.slice(0, 4)}…{quote.data.recipientWallet.slice(-4)}
+                  {quote.data.recipientWallet.slice(0, 6)}…{quote.data.recipientWallet.slice(-4)}
                 </span>
               </div>
               <p className="font-body text-xs text-muted2 leading-relaxed">
-                Each leg is signed and settled atomically. Settled tokens land directly into the receiver's personal token accounts with zero escrow custody.
+                Each leg is signed and settled atomically. Settled tokens land directly into the receiver's personal wallet with zero escrow custody.
               </p>
             </>
           ) : (
             !quote.isFetching &&
             !quote.error && (
               <p className="font-body text-sm text-muted2">
-                Enter a registered handle and an amount to dual-quote the settlement legs.
+                Enter a registered handle and an amount to quote the settlement legs.
               </p>
             )
           )}
@@ -484,7 +492,7 @@ export default function Payments() {
       {/* Verified On-Chain Settlement Receipts */}
       <DashTable
         caption={`CONFIRMED RECEIPTS · ${allReceipts.length}`}
-        columns={["Handle", "Asset", "Signature", "Status", "Time"]}
+        columns={["Handle", "Asset", profile.chainId ? "Tx Hash" : "Signature", "Status", "Time"]}
         minWidth="min-w-[640px]"
       >
         {allReceipts.map((entry) => (
@@ -494,7 +502,7 @@ export default function Payments() {
             <DashCell className="font-mono text-xs text-muted2">
               {entry.signature ? (
                 <a
-                  href={`https://solscan.io/tx/${entry.signature}`}
+                  href={profile.explorer.tx(entry.signature)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 hover:text-red transition-colors"
@@ -525,7 +533,7 @@ export default function Payments() {
             No payment receipts recorded yet
           </p>
           <p className="font-body text-xs text-secondary2 mt-1.5">
-            When payments are settled through this rail, verifiable Solana transaction receipts will appear here automatically.
+            When payments are settled through this rail, verifiable {profile.network} transaction receipts will appear here automatically.
           </p>
         </div>
       )}

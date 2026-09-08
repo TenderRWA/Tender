@@ -44,7 +44,7 @@ export function NftThumb({
   size = "md",
   className = "",
 }: {
-  nft: Pick<NftMetadata, "name" | "image" | "symbol">;
+  nft: { name?: string; image?: string; symbol?: string };
   size?: NftThumbSize;
   className?: string;
 }) {
@@ -116,7 +116,9 @@ export function NftBadge({
   );
 }
 
-/** Mint address as a Solscan link. Mono, so it reads as an identifier. */
+import { useRailProfile } from "@/lib/rail";
+
+/** Mint address as a rail explorer link. Mono, so it reads as an identifier. */
 export function MintLink({
   mint,
   className = "",
@@ -128,9 +130,10 @@ export function MintLink({
   head?: number;
   tail?: number;
 }) {
+  const profile = useRailProfile();
   return (
     <a
-      href={solscanTokenUrl(mint)}
+      href={profile.explorer.token(mint)}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
@@ -153,10 +156,11 @@ export function NftIdentity({
   size = "md",
   className = "",
 }: {
-  nft: Pick<NftMetadata, "mint" | "name" | "image" | "symbol">;
+  nft: { address?: string; mint?: string; name?: string; image?: string; symbol?: string };
   size?: NftThumbSize;
   className?: string;
 }) {
+  const mintOrAddress = nft.mint || nft.address || "";
   return (
     <div className={`flex min-w-0 items-center gap-3 ${className}`}>
       <NftThumb nft={nft} size={size} />
@@ -170,7 +174,7 @@ export function NftIdentity({
               {nft.symbol}
             </span>
           )}
-          <MintLink mint={nft.mint} />
+          <MintLink mint={mintOrAddress} />
         </div>
       </div>
     </div>

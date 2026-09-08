@@ -9,14 +9,16 @@ import {
   SovereignDeliveryNote,
 } from "@/components/dashboard/NftMedia";
 import {
-  isSolanaAddress,
   truncateMint,
   useHandle,
   useNftMetadata,
   useTransferNft,
   useWalletNfts,
+  type NftRef,
 } from "@/hooks/useTender";
 import { useWallet } from "@/lib/wallet/wallet-context";
+import { useRailProfile, useRailStore } from "@/lib/rail";
+import type { RailNft } from "@/types/rail";
 import type { NftMetadata } from "@/types/tender";
 
 const inputCls =
@@ -35,7 +37,7 @@ function formatNftError(raw: string): string {
     return "That tag isn't registered on the rail, so it has no wallet to deliver to.";
   }
   if (low.includes("insufficient") || low.includes("rent")) {
-    return "Not enough SOL to cover network rent for the recipient's token account.";
+    return "Not enough funds to cover network gas/rent.";
   }
   if (low.includes("owner") || low.includes("balance") || low.includes("token account")) {
     return "This wallet doesn't currently hold that collectible.";
@@ -52,7 +54,7 @@ function PickerCard({
   selected,
   onSelect,
 }: {
-  nft: NftMetadata;
+  nft: RailNft;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -61,7 +63,7 @@ function PickerCard({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      title={nft.name || nft.mint}
+      title={nft.name || nft.address}
       className={`group flex flex-col gap-2 rounded-xl border p-2 text-left transition-all duration-150 cursor-pointer ${
         selected
           ? "border-ink bg-raised shadow-xs"
@@ -74,7 +76,7 @@ function PickerCard({
           {nft.name || "Unnamed"}
         </span>
         <span className="mt-0.5 block truncate font-mono text-[10px] text-muted2">
-          {truncateMint(nft.mint)}
+          {truncateMint(nft.address)} {nft.tokenId ? `#${nft.tokenId}` : ""}
         </span>
       </span>
     </button>
@@ -83,22 +85,25 @@ function PickerCard({
 
 function NftPicker({
   wallet,
-  selectedMint,
+  selectedNft,
   onSelect,
 }: {
   wallet: string | null;
-  selectedMint: string;
-  onSelect: (nft: NftMetadata) => void;
+  selectedNft: RailNft | null;
+  onSelect: (nft: RailNft) => void;
 }) {
   const { data, isLoading, isError, error, refetch, isFetching } = useWalletNfts(wallet);
   const [filter, setFilter] = useState("");
 
-  const nfts = useMemo(() => data?.nfts ?? [], [data?.nfts]);
+  const nfts = useMemo(() => data?.data ?? [], [data?.data]);
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return nfts;
     return nfts.filter(
-      (n) => n.name?.toLowerCase().includes(q) || n.mint.toLowerCase().includes(q),
+      (n) =>
+        n.name?.toLowerCase().includes(q) ||
+        n.address.toLowerCase().includes(q) ||
+        (n.tokenId && n.tokenId.includes(q)),
     );
   }, [nfts, filter]);
 
@@ -182,9 +187,9 @@ function NftPicker({
         <div className="menu-scroll grid max-h-[320px] grid-cols-2 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-3">
           {shown.map((nft) => (
             <PickerCard
-              key={nft.mint}
+              key={`${nft.address}-${nft.tokenId ?? ""}`}
               nft={nft}
-              selected={nft.mint === selectedMint}
+              selected={selectedNft?.address === nft.address && selectedNft?.tokenId === nft.tokenId}
               onSelect={() => onSelect(nft)}
             />
           ))}
@@ -206,7 +211,7 @@ interface NftTransferPanelProps {
   /** Shared with the token composer so switching modes keeps the recipient. */
   handle: string;
   onHandleChange: (value: string) => void;
-  onNftSettled?: (result: { signature: string; nft: NftMetadata; handle: string }) => void;
+  onNftSettled?: (result: { signature?: string; txId?: string; nft: RailNft | NftMetadata; handle: string }) => void;
 }
 
 /**
@@ -221,14 +226,17 @@ export default function NftTransferPanel({
   onHandleChange,
   onNftSettled,
 }: NftTransferPanelProps) {
+  const profile = useRailProfile();
+  const rail = useRailStore((s) => s.activeRail);
   const { address: wallet } = useWallet();
   const transfer = useTransferNft();
 
-  const [selected, setSelected] = useState<NftMetadata | null>(null);
+  const [selected, setSelected] = useState<RailNft | null>(null);
   const [mintInput, setMintInput] = useState("");
+  const [tokenIdInput, setTokenIdInput] = useState("");
   const [receipt, setReceipt] = useState<{
-    signature: string;
-    nft: NftMetadata;
+    txId: string;
+    nft: RailNft;
     handle: string;
   } | null>(null);
 
@@ -239,29 +247,43 @@ export default function NftTransferPanel({
     isError: handleNotFound,
   } = useHandle(cleanHandle);
 
-  // Resolve a pasted mint so the payer sees what they are about to send.
-  const pasted = useNftMetadata(mintInput);
-  const pastedNft = pasted.data?.nft;
+  // Resolve a pasted mint or contract address so the payer sees what they are about to send.
+  const pastedRef = useMemo<NftRef | null>(() => {
+    if (!mintInput.trim()) return null;
+    return {
+      address: mintInput.trim(),
+      tokenId: rail === "robinhood" ? tokenIdInput.trim() : undefined,
+    };
+  }, [mintInput, tokenIdInput, rail]);
+
+  const pasted = useNftMetadata(pastedRef);
 
   useEffect(() => {
-    if (pastedNft) setSelected(pastedNft);
-  }, [pastedNft]);
+    if (pasted.data) setSelected(pasted.data);
+  }, [pasted.data]);
 
-  const ready = Boolean(wallet) && Boolean(selected?.mint) && cleanHandle.length > 0;
+  const ready =
+    Boolean(wallet) &&
+    Boolean(selected?.address) &&
+    cleanHandle.length > 0 &&
+    (rail === "robinhood" ? Boolean(selected?.tokenId?.trim()) : true);
 
   const send = () => {
     if (!ready || !wallet || !selected || transfer.isPending) return;
     transfer.mutate(
       {
         userWallet: wallet,
-        nftMint: selected.mint,
+        nft: {
+          address: selected.address,
+          tokenId: selected.tokenId,
+        },
         recipientTag: cleanHandle,
         recipientWallet: handleData?.ownerWallet || undefined,
       },
       {
         onSuccess: (res) => {
           const receiptData = {
-            signature: res.signature,
+            txId: res.txId,
             nft: res.nft,
             handle: res.recipientHandle || cleanHandle,
           };
@@ -269,6 +291,7 @@ export default function NftTransferPanel({
           onNftSettled?.(receiptData);
           setSelected(null);
           setMintInput("");
+          setTokenIdInput("");
         },
       },
     );
@@ -332,7 +355,7 @@ export default function NftTransferPanel({
                         </span>
                       </div>
                       <a
-                        href={`https://solscan.io/account/${handleData.ownerWallet}`}
+                        href={profile.explorer.account(handleData.ownerWallet)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-[10px] text-muted2 hover:text-foreground flex items-center gap-1 truncate"
@@ -360,28 +383,40 @@ export default function NftTransferPanel({
           </span>
           <NftPicker
             wallet={wallet}
-            selectedMint={selected?.mint ?? ""}
+            selectedNft={selected}
             onSelect={(nft) => {
               setSelected(nft);
-              setMintInput("");
+              setMintInput(nft.address);
+              setTokenIdInput(nft.tokenId || "");
             }}
           />
         </div>
 
-        <label className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2">
-            OR PASTE A MINT ADDRESS
+            {rail === "robinhood" ? "OR PASTE ERC-721 CONTRACT & TOKEN ID" : "OR PASTE A MINT ADDRESS"}
           </span>
-          <input
-            value={mintInput}
-            onChange={(e) => setMintInput(e.target.value)}
-            placeholder="7sm142JgXr3u5e2HXMfimidVPjZWwZNQr4oTBckQELJr"
-            spellCheck={false}
-            className={`${inputCls} font-mono text-xs`}
-          />
-          {mintInput.trim().length > 0 && !isSolanaAddress(mintInput) && (
+          <div className={`grid ${rail === "robinhood" ? "grid-cols-1 sm:grid-cols-3 gap-2" : "grid-cols-1"}`}>
+            <input
+              value={mintInput}
+              onChange={(e) => setMintInput(e.target.value)}
+              placeholder={rail === "robinhood" ? "0x... contract address" : "7sm142JgXr3u5e2HXMfimidVPjZWwZNQr4oTBckQELJr"}
+              spellCheck={false}
+              className={`${inputCls} font-mono text-xs ${rail === "robinhood" ? "sm:col-span-2" : ""}`}
+            />
+            {rail === "robinhood" && (
+              <input
+                value={tokenIdInput}
+                onChange={(e) => setTokenIdInput(e.target.value)}
+                placeholder="Token ID (e.g. 1)"
+                spellCheck={false}
+                className={`${inputCls} font-mono text-xs`}
+              />
+            )}
+          </div>
+          {mintInput.trim().length > 0 && !profile.isAddress(mintInput) && (
             <span className="font-mono text-[10px] text-muted2">
-              Keep typing — a Solana mint is 32–44 base58 characters.
+              Keep typing — enter a valid {profile.addressLabel.toLowerCase()}.
             </span>
           )}
           {pasted.isLoading && (
@@ -394,12 +429,12 @@ export default function NftTransferPanel({
               {formatNftError(pasted.error?.message ?? "")}
             </span>
           )}
-        </label>
+        </div>
 
         {/* Explainer Notice */}
         <div className="rounded-xl border border-hairline bg-base/60 px-4 py-3">
           <p className="font-body text-xs text-secondary2 leading-relaxed">
-            <strong className="text-foreground font-medium">Sovereign direct delivery:</strong> Transferred 1:1 to {cleanHandle ? `@${cleanHandle}` : "the recipient tag"}&apos;s connected Solana wallet with zero DEX selling and zero election slicing.
+            <strong className="text-foreground font-medium">Sovereign direct delivery:</strong> Transferred 1:1 to {cleanHandle ? `@${cleanHandle}` : "the recipient tag"}&apos;s connected {profile.network} wallet with zero DEX selling and zero election slicing.
           </p>
         </div>
 
@@ -415,7 +450,7 @@ export default function NftTransferPanel({
             }`}
           >
             {transfer.isPending
-              ? "TRANSFERRING VIA WALLET…"
+              ? `TRANSFERRING VIA ${profile.network.toUpperCase()}…`
               : cleanHandle
                 ? `TRANSFER NFT TO @${cleanHandle.toUpperCase()}`
                 : "TRANSFER NFT"}
@@ -460,12 +495,12 @@ export default function NftTransferPanel({
                 <NftIdentity nft={receipt.nft} size="md" />
               </div>
               <a
-                href={`https://solscan.io/tx/${receipt.signature}`}
+                href={profile.explorer.tx(receipt.txId)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 font-mono text-xs text-success hover:underline"
               >
-                <span>View transaction</span>
+                <span>View on {profile.explorer.name}</span>
                 <ExternalLink className="h-3 w-3" />
               </a>
               <button
@@ -478,7 +513,7 @@ export default function NftTransferPanel({
             </motion.div>
           ) : selected ? (
             <motion.div
-              key={selected.mint}
+              key={`${selected.address}-${selected.tokenId ?? ""}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -496,7 +531,7 @@ export default function NftTransferPanel({
                       {selected.symbol}
                     </span>
                   )}
-                  <MintLink mint={selected.mint} head={6} tail={6} />
+                  <MintLink mint={selected.address} head={6} tail={6} />
                 </div>
               </div>
 

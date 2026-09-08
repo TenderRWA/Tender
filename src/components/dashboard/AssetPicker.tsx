@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 
 import { useAssets } from "@/hooks/useTender";
-import type { SolanaTokenInfo } from "@/types/tender";
+import type { RailToken } from "@/types/rail";
 
 /* Golden-section geometry. The panel is 336px wide and its full height is
    336 x 1.618 = 544px: a 60px search header over a 460px list viewport. At a
@@ -30,7 +30,7 @@ function Option({
   onPick,
   registerRef,
 }: {
-  token: SolanaTokenInfo;
+  token: RailToken;
   selected: boolean;
   active: boolean;
   onPick: () => void;
@@ -78,7 +78,7 @@ export default function AssetPicker({
   label,
 }: {
   value: string;
-  onSelect: (token: SolanaTokenInfo) => void;
+  onSelect: (token: RailToken) => void;
   label: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -98,24 +98,29 @@ export default function AssetPicker({
   /* Two ordered groups give the list a spine: the settlement currencies first,
      then the equities. A search collapses both into one ranked set. */
   const { base, equities, options } = useMemo(() => {
-    const dedupe = (list: SolanaTokenInfo[]) => {
+    const dedupe = (list: RailToken[]) => {
       const seen = new Set<string>();
       return list.filter((t) => {
-        if (!t?.mint || seen.has(t.mint)) return false;
-        seen.add(t.mint);
+        const key = t?.address || t?.symbol;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
         return true;
       });
     };
     const q = trimmed.toLowerCase();
-    const matches = (t: SolanaTokenInfo) =>
+    const matches = (t: RailToken) =>
       !q ||
       t.symbol.toLowerCase().includes(q) ||
       t.name.toLowerCase().includes(q) ||
-      (t.underlyingTicker ?? "").toLowerCase().includes(q);
+      (t.underlyingTicker ?? "").toLowerCase().includes(q) ||
+      t.address.toLowerCase() === q;
 
     const b = dedupe(data?.baseCurrencies ?? []).filter(matches);
-    const e = dedupe(searching ? (data?.assets ?? []) : (data?.featured ?? [])).filter(
-      (t) => matches(t) && !b.some((x) => x.mint === t.mint),
+    const catalog = searching ? (data?.all ?? []) : (data?.featured ?? []);
+    const e = dedupe(catalog).filter(
+      (t) =>
+        matches(t) &&
+        !b.some((x) => (x.address || x.symbol).toLowerCase() === (t.address || t.symbol).toLowerCase()),
     );
     return { base: b, equities: e, options: [...b, ...e] };
   }, [data, trimmed, searching]);
@@ -171,7 +176,7 @@ export default function AssetPicker({
     rowRefs.current[active]?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
-  const commit = (token: SolanaTokenInfo) => {
+  const commit = (token: RailToken) => {
     onSelect(token);
     setOpen(false);
     setQuery("");
@@ -203,12 +208,12 @@ export default function AssetPicker({
   };
 
   let cursor = -1;
-  const row = (token: SolanaTokenInfo) => {
+  const row = (token: RailToken) => {
     cursor += 1;
     const index = cursor;
     return (
       <Option
-        key={token.mint}
+        key={token.address || token.symbol}
         token={token}
         selected={token.symbol === value}
         active={index === active}

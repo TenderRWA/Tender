@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { scrollToHash } from "@/lib/lenis";
 import { useComingSoon } from "@/components/ComingSoonModal";
 import TerminalControls from "@/components/dashboard/TerminalControls";
+import RailSwitcher from "@/components/dashboard/RailSwitcher";
+import { useRailProfile } from "@/lib/rail";
 
 /** `newTab` links are plain anchors: reading the doc shouldn't lose the page
     the visitor was already on. */
@@ -41,6 +43,7 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const comingSoon = useComingSoon();
+  const profile = useRailProfile();
   // The terminal carries its identity controls here rather than in a
   // second bar of its own.
   const isTerminal = location.pathname.startsWith("/dashboard");
@@ -126,10 +129,13 @@ export default function Navbar() {
             {isTerminal ? (
               <TerminalControls />
             ) : (
-              <span className="hidden items-center gap-2.5 font-mono text-[13px] uppercase tracking-[0.08em] text-ink/75 md:inline-flex">
-                <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-                Solana · Mainnet-Beta
-              </span>
+              <div className="hidden md:flex items-center gap-3">
+                <RailSwitcher />
+                <span className="items-center gap-2.5 font-mono text-[13px] uppercase tracking-[0.08em] text-ink/75 inline-flex">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+                  {profile.network}
+                </span>
+              </div>
             )}
             {/* An unlabelled hamburger is the one control every visitor has to
                 guess at. The word costs 44px and removes the guess. */}

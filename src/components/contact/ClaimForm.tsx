@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from "@/lib/router-compat";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useComingSoon } from "@/components/ComingSoonModal";
-import { useHandleAvailability, useRegisterHandle } from "@/hooks/useTender";
+import { useAssets, useHandleAvailability, useRegisterHandle } from "@/hooks/useTender";
 import ConnectWalletButton from "@/components/wallet/ConnectWalletButton";
 import WalletModal from "@/components/wallet/WalletModal";
 import AssetPickerModal from "@/components/dashboard/AssetPickerModal";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
+import { useRailProfile, useRailStore } from "@/lib/rail";
 import {
   getInitialTokenColor,
   extractDominantColorFromImage,
@@ -28,7 +29,8 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://api.tenderrwa.com";
 export interface AssetOption {
   symbol: string;
   name: string;
-  mint: string;
+  mint?: string;
+  address?: string;
   decimals: number;
   iconUrl?: string;
   underlyingTicker?: string;
@@ -152,7 +154,8 @@ export interface ElectionItem {
   id: string;
   symbol: string;
   name: string;
-  mint: string;
+  mint?: string;
+  address?: string;
   percent: number;
   color: string;
   iconUrl?: string;
@@ -225,6 +228,7 @@ function DynamicPreviewCard({
   items: ElectionItem[];
   role: Role;
 }) {
+  const profile = useRailProfile();
   return (
     <div className="rounded border border-hairline bg-card2 dot-matrix-dark p-8 md:p-10 lg:sticky lg:top-28">
       <div className="flex items-center gap-4">
@@ -279,7 +283,7 @@ function DynamicPreviewCard({
       </div>
 
       <p className="border-t border-hairline pt-5 font-mono text-[10px] uppercase leading-relaxed tracking-[0.12em] text-muted2">
-        {role.toUpperCase()} · SETTLES VIA JUPITER & RELAY · NON-CUSTODIAL · SOLANA
+        {role.toUpperCase()} · SETTLES VIA {profile.venueLabel.toUpperCase()} · NON-CUSTODIAL · {profile.network.toUpperCase()}
       </p>
     </div>
   );
@@ -302,65 +306,100 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
   const [claimedHandle, setClaimedHandle] = useState("");
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const comingSoon = useComingSoon();
+  const profile = useRailProfile();
+  const rail = useRailStore((s) => s.activeRail);
   const { address, walletName } = useWallet();
   const wallet = address;
   const { setHandle: setSessionHandle } = useTenderSession();
+  const { data: assetsCatalog } = useAssets({ limit: 1000 });
 
   // Dynamic election items with derived brand colors
-  const [items, setItems] = useState<ElectionItem[]>([
-    {
-      id: "item-1",
-      symbol: "SPYx",
-      name: "S&P 500 ETF",
-      mint: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
-      percent: 50,
-      color: getInitialTokenColor("SPYx"),
-      iconUrl: DEFAULT_FEATURED_ASSETS[0].iconUrl,
-    },
-    {
-      id: "item-2",
-      symbol: "NVDAx",
-      name: "NVIDIA Corp",
-      mint: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
-      percent: 30,
-      color: getInitialTokenColor("NVDAx"),
-      iconUrl: DEFAULT_FEATURED_ASSETS[3].iconUrl,
-    },
-    {
-      id: "item-3",
-      symbol: "USDC",
-      name: "USD Coin",
-      mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-      percent: 20,
-      color: getInitialTokenColor("USDC"),
-      iconUrl: DEFAULT_FEATURED_ASSETS[1].iconUrl,
-    },
-  ]);
+  const [items, setItems] = useState<ElectionItem[]>(() =>
+    rail === "robinhood"
+      ? [
+          {
+            id: "item-1",
+            symbol: "SPCX",
+            name: "S&P 500 Index",
+            address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa",
+            percent: 60,
+            color: getInitialTokenColor("SPCX"),
+          },
+          {
+            id: "item-2",
+            symbol: "USDG",
+            name: "USD Global",
+            address: "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+            percent: 30,
+            color: getInitialTokenColor("USDG"),
+          },
+          {
+            id: "item-3",
+            symbol: "NVDA",
+            name: "NVIDIA Corp",
+            address: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+            percent: 10,
+            color: getInitialTokenColor("NVDA"),
+          },
+        ]
+      : [
+          {
+            id: "item-1",
+            symbol: "SPYx",
+            name: "S&P 500 ETF",
+            address: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
+            percent: 50,
+            color: getInitialTokenColor("SPYx"),
+            iconUrl: DEFAULT_FEATURED_ASSETS[0].iconUrl,
+          },
+          {
+            id: "item-2",
+            symbol: "NVDAx",
+            name: "NVIDIA Corp",
+            address: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+            percent: 30,
+            color: getInitialTokenColor("NVDAx"),
+            iconUrl: DEFAULT_FEATURED_ASSETS[3].iconUrl,
+          },
+          {
+            id: "item-3",
+            symbol: "USDC",
+            name: "USD Coin",
+            address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            percent: 20,
+            color: getInitialTokenColor("USDC"),
+            iconUrl: DEFAULT_FEATURED_ASSETS[1].iconUrl,
+          },
+        ]
+  );
 
   const [availableAssets, setAvailableAssets] = useState<AssetOption[]>(DEFAULT_FEATURED_ASSETS);
   const [activePickerIndex, setActivePickerIndex] = useState<number | null>(null);
 
   // Load catalog on mount & extract colors for any non-canonical items
   useEffect(() => {
-    async function fetchAssets() {
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/assets?limit=1000`);
-        if (res.ok) {
-          const data = await res.json();
-          const combined = [
-            ...(data.baseCurrencies || []),
-            ...(data.assets || data.featured || []),
-          ];
-          if (combined.length > 0) {
-            setAvailableAssets(combined);
-          }
-        }
-      } catch (e) {
-        // fallback
+    if (assetsCatalog) {
+      const combined = [
+        ...(assetsCatalog.baseCurrencies || []),
+        ...(assetsCatalog.assets || assetsCatalog.featured || []),
+      ];
+      if (combined.length > 0) {
+        setAvailableAssets(
+          combined.map((t) => ({
+            symbol: t.symbol,
+            name: t.name,
+            mint: t.address || ("mint" in (t as Record<string, unknown>) ? String((t as Record<string, unknown>).mint || "") : ""),
+            address: t.address,
+            decimals: t.decimals,
+            iconUrl: t.iconUrl,
+            underlyingTicker: t.underlyingTicker,
+          }))
+        );
       }
     }
-    fetchAssets();
-  }, []);
+  }, [assetsCatalog]);
+
+  const iconUrlsKey = items.map((i) => i.iconUrl).join(",");
 
   // Dynamically resolve image colors on mount or whenever item icons change
   useEffect(() => {
@@ -374,7 +413,8 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
         }
       }
     });
-  }, [items.map((i) => i.iconUrl).join(",")]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iconUrlsKey]);
 
   // Real-time automatic debounce on handle input
   useEffect(() => {
@@ -428,7 +468,8 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
         ...copy[index],
         symbol: newAsset.symbol,
         name: newAsset.name,
-        mint: newAsset.mint,
+        mint: newAsset.address || newAsset.mint || "",
+        address: newAsset.address || newAsset.mint,
         iconUrl: newAsset.iconUrl,
         color: initialColor,
       };
@@ -461,7 +502,8 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
         id: newItemId,
         symbol: nextAsset.symbol,
         name: nextAsset.name,
-        mint: nextAsset.mint,
+        mint: nextAsset.address || nextAsset.mint || "",
+        address: nextAsset.address || nextAsset.mint,
         percent: 0,
         color: initialColor,
         iconUrl: nextAsset.iconUrl,
@@ -503,7 +545,7 @@ export default function ClaimForm({ embedded = false }: { embedded?: boolean }) 
       .filter((it) => it.percent > 0)
       .map((it) => ({
         symbol: it.symbol,
-        mint: it.mint,
+        address: it.address || it.mint || "",
         basisPoints: it.percent * 100,
       }));
 

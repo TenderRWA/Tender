@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ModulePage from "@/components/dashboard/ModulePage";
 import DashTable, {
@@ -10,13 +10,16 @@ import DashTable, {
 import { useAssets, useCreateInvoice, useInvoices } from "@/hooks/useTender";
 import { useTenderSession } from "@/lib/tender-session";
 import { useWallet } from "@/lib/wallet/wallet-context";
-import type { InvoiceRecord } from "@/types/tender";
+import { useRailProfile, useRailStore } from "@/lib/rail";
+import type { RailInvoice } from "@/types/rail";
 import { ExternalLink, Copy, Check, X, CheckCircle2, AlertCircle } from "lucide-react";
 
 const inputCls =
   "w-full glass-soft rounded-xl px-4 py-3 font-body text-sm text-foreground placeholder:text-muted2 focus:outline-none focus:border-red focus:ring-2 focus:ring-red/25 transition-all duration-150";
 
 export default function Invoices() {
+  const profile = useRailProfile();
+  const rail = useRailStore((s) => s.activeRail);
   const { handle: sessionHandle } = useTenderSession();
   const { address: wallet } = useWallet();
   const { data: assets } = useAssets({ featured: true });
@@ -28,21 +31,39 @@ export default function Invoices() {
     wallet,
   });
 
-  const baseCurrencies = assets?.baseCurrencies ?? [];
+  const currencyOptions = useMemo(() => {
+    const baseCurrencies = assets?.baseCurrencies ?? [];
+    if (baseCurrencies.length > 0) {
+      return baseCurrencies;
+    }
+    return rail === "robinhood"
+      ? [
+          { symbol: "USDG", name: "USD Global", address: "0x6A9E96FE8B33a253818e690f0E9aFaa0004505f5" },
+          { symbol: "ETH", name: "Ethereum (Native)", address: "0x0000000000000000000000000000000000000000" },
+        ]
+      : [
+          { symbol: "USDC", name: "USD Coin", address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+          { symbol: "SOL", name: "Solana", address: "So11111111111111111111111111111111111111112" },
+        ];
+  }, [assets?.baseCurrencies, rail]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [selectedCurrency, setSelectedCurrency] = useState<string>("USDC");
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(profile.defaultPayToken);
   const [memo, setMemo] = useState("");
   const [days, setDays] = useState("14");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    setSelectedCurrency(profile.defaultPayToken);
+  }, [profile.defaultPayToken]);
+
   // Local state to ensure newly created invoices appear in the table instantly
-  const [localCreated, setLocalCreated] = useState<InvoiceRecord[]>([]);
+  const [localCreated, setLocalCreated] = useState<RailInvoice[]>([]);
 
   // Modals for success and error
-  const [successModalInvoice, setSuccessModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [successModalInvoice, setSuccessModalInvoice] = useState<RailInvoice | null>(null);
   const [errorModalMessage, setErrorModalMessage] = useState<string | null>(null);
 
   const effectiveHandle = (recipient || sessionHandle).trim().replace(/^@/, "");
@@ -50,8 +71,8 @@ export default function Invoices() {
   const valid = Number.isFinite(parsed) && parsed > 0 && effectiveHandle.length > 0;
 
   // Merge DB invoices with locally created session invoices so nothing is missing
-  const invoices = useMemo<InvoiceRecord[]>(() => {
-    const fromDb = dbData?.invoices ?? [];
+  const invoices = useMemo<RailInvoice[]>(() => {
+    const fromDb = dbData?.data ?? [];
     const seen = new Set(fromDb.map((i) => i.id));
     const pendingLocal = localCreated.filter((i) => !seen.has(i.id));
     return [...pendingLocal, ...fromDb];
@@ -61,17 +82,15 @@ export default function Invoices() {
     if (!valid || create.isPending) return;
 
     const chosenToken =
-      baseCurrencies.find((b) => b.symbol.toUpperCase() === selectedCurrency.toUpperCase()) ||
-      (selectedCurrency.toUpperCase() === "SOL"
-        ? { symbol: "SOL", mint: "So11111111111111111111111111111111111111112" }
-        : { symbol: "USDC", mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" });
+      currencyOptions.find((b) => b.symbol.toUpperCase() === selectedCurrency.toUpperCase()) ||
+      currencyOptions[0];
 
     create.mutate(
       {
         recipientHandle: effectiveHandle,
         amount: parsed,
-        tokenMint: chosenToken.mint,
-        tokenSymbol: chosenToken.symbol,
+        tokenAddress: chosenToken?.address,
+        tokenSymbol: chosenToken?.symbol || selectedCurrency,
         memo: memo.trim() || undefined,
         expiryMinutes: Math.max(1, Math.round(Number(days || 14) * 24 * 60)),
         creatorWallet: wallet || undefined,
@@ -160,8 +179,11 @@ export default function Invoices() {
                 className={inputCls}
                 aria-label="Invoice denomination token"
               >
-                <option value="USDC">USDC (USD Coin)</option>
-                <option value="SOL">SOL (Solana)</option>
+                {currencyOptions.map((curr) => (
+                  <option key={curr.address || curr.symbol} value={curr.symbol}>
+                    {curr.symbol} {curr.name ? `(${curr.name})` : ""}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="flex flex-col gap-2">
@@ -201,6 +223,15 @@ export default function Invoices() {
         </div>
       )}
 
+      {dbData?.isDemo && (
+        <div className="glass-soft border border-hairline/80 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs text-muted2">
+          <span>
+            Showing preview invoice records for {profile.network}. Pay-links generated will route directly via Uniswap V4.
+          </span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-secondary2">DEMO PREVIEW</span>
+        </div>
+      )}
+
       <DashTable
         caption={`PAY-LINKS · ${invoices.length}`}
         columns={["ID", "Amount", "Memo", "Expires", "Share Links", "Status"]}
@@ -221,7 +252,7 @@ export default function Invoices() {
             </DashCell>
             <DashCell className="font-mono text-xs font-semibold text-foreground">
               {Number(inv.amount).toLocaleString()}{" "}
-              <span className="text-secondary2 font-normal">{inv.tokenSymbol || "USDC"}</span>
+              <span className="text-secondary2 font-normal">{inv.tokenSymbol || profile.defaultPayToken}</span>
             </DashCell>
             <DashCell className="max-w-[200px] truncate text-muted2">
               {inv.memo || "—"}
@@ -248,20 +279,33 @@ export default function Invoices() {
                     </>
                   )}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(inv.solanaPayUrl, `sol-${inv.id}`)}
-                  className="font-mono text-[10px] uppercase tracking-[0.12em] border border-hairline/80 hover:border-red text-secondary2 hover:text-foreground rounded-lg px-2.5 py-1 transition-colors duration-150 inline-flex items-center gap-1"
-                >
-                  {copiedKey === `sol-${inv.id}` ? (
-                    <>
-                      <Check className="w-3 h-3 text-success" />
-                      <span>Copied</span>
-                    </>
-                  ) : (
-                    <span>Solana Pay</span>
-                  )}
-                </button>
+                {inv.walletPayUrl && (
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(inv.walletPayUrl!, `sol-${inv.id}`)}
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] border border-hairline/80 hover:border-red text-secondary2 hover:text-foreground rounded-lg px-2.5 py-1 transition-colors duration-150 inline-flex items-center gap-1"
+                  >
+                    {copiedKey === `sol-${inv.id}` ? (
+                      <>
+                        <Check className="w-3 h-3 text-success" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <span>Solana Pay</span>
+                    )}
+                  </button>
+                )}
+                {inv.txId && (
+                  <a
+                    href={profile.explorer.tx(inv.txId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] border border-hairline/80 hover:border-red text-secondary2 hover:text-foreground rounded-lg px-2 py-1 transition-colors duration-150 inline-flex items-center gap-1"
+                  >
+                    <span>Tx</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
               </div>
             </DashCell>
             <DashCell>
@@ -338,7 +382,7 @@ export default function Invoices() {
                   <span className="font-mono text-xs text-muted2">Amount</span>
                   <span className="font-mono text-sm font-bold text-red">
                     {Number(successModalInvoice.amount).toLocaleString()}{" "}
-                    {successModalInvoice.tokenSymbol || "USDC"}
+                    {successModalInvoice.tokenSymbol || profile.defaultPayToken}
                   </span>
                 </div>
                 {successModalInvoice.memo && (
@@ -391,35 +435,37 @@ export default function Invoices() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 block">
-                  Solana Pay QR URI
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    readOnly
-                    value={successModalInvoice.solanaPayUrl}
-                    className="w-full rounded-xl border border-hairline bg-base/80 px-3.5 py-2.5 font-mono text-xs text-foreground outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(successModalInvoice.solanaPayUrl, "modal-sol")}
-                    className="shrink-0 px-4 py-2.5 rounded-xl glass-soft border border-hairline hover:border-red text-foreground font-mono text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5"
-                  >
-                    {copiedKey === "modal-sol" ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-success" />
-                        <span>Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
+              {successModalInvoice.walletPayUrl && (
+                <div className="space-y-3">
+                  <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted2 block">
+                    Solana Pay QR URI
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      value={successModalInvoice.walletPayUrl}
+                      className="w-full rounded-xl border border-hairline bg-base/80 px-3.5 py-2.5 font-mono text-xs text-foreground outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(successModalInvoice.walletPayUrl!, "modal-sol")}
+                      className="shrink-0 px-4 py-2.5 rounded-xl glass-soft border border-hairline hover:border-red text-foreground font-mono text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                    >
+                      {copiedKey === "modal-sol" ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-success" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <button
                 type="button"
