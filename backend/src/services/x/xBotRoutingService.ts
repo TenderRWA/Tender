@@ -1,8 +1,18 @@
 import { query } from "../../db";
-import { resolveSolanaToken } from "../../lib/rwaTokens";
-import { calculatePortfolioElectionQuotes, formatTokenUnits } from "../dualQuoteEngine";
+import {
+  resolveRobinhoodToken,
+  RobinhoodTokenInfo,
+  USDG,
+  ETH,
+  isValidEvmAddress,
+  formatTokenUnits,
+} from "../../v2/lib/robinhoodTokens";
+import { getV2HandleDetails } from "../../v2/services/handleService";
+import {
+  quotePortfolioSettlement,
+  PortfolioElectionLeg,
+} from "../../v2/services/robinhoodSettlement";
 import type { ParsedBotIntent } from "./groqIntentParser";
-import { isValidSolanaAddress, resolveNftMetadata } from "../nftService";
 
 export interface BotRoutingResult {
   replyText: string;
@@ -24,7 +34,7 @@ export async function routeBotIntent(params: {
   if (intent.action === "help") {
     return {
       replyText:
-        "TENDER settles incoming payments into custom stock portfolios on Solana. Mention me with:\n• 'pay @handle 50 USDC'\n• 'quote 100 USDC for @handle'\nTap the link in my bio to claim your handle.",
+        "TENDER settles incoming payments into custom stock portfolios on Robinhood Chain (Chain 4663). Mention me with:\n• 'pay @handle 50 USDG'\n• 'quote 100 USDG for @handle'\n• 'send 0.1 ETH to @handle'\nTap the link in my bio to claim your handle.",
       recipientHandle: "",
       recipientWallet: "",
       isRegistered: false,
@@ -33,190 +43,123 @@ export async function routeBotIntent(params: {
 
   // 2. Election / Portfolio query action
   if (intent.action === "election" && intent.target) {
-    const cleanHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
-    const handleRes = await query(
-      "SELECT handle, owner_wallet FROM handles WHERE handle = $1 OR LOWER(x_username) = $1 LIMIT 1",
-      [cleanHandle]
-    );
+    const cleanHandle = intent.target.replace(/^@|^#/, "").toLowerCase().trim();
+    const handleDetails = await getV2HandleDetails(cleanHandle);
 
-    let recipientHandle = cleanHandle;
-    let recipientWallet = "";
-
-    if (handleRes.rows && handleRes.rows.length > 0) {
-      recipientHandle = handleRes.rows[0].handle;
-      recipientWallet = handleRes.rows[0].owner_wallet;
-    } else {
-      const xAccRes = await query(
-        "SELECT wallet_address, x_username FROM x_accounts WHERE LOWER(x_username) = $1 LIMIT 1",
-        [cleanHandle]
-      );
-      if (xAccRes.rows && xAccRes.rows.length > 0) {
-        recipientWallet = xAccRes.rows[0].wallet_address;
-        const wHandleRes = await query(
-          "SELECT handle FROM handles WHERE owner_wallet = $1 LIMIT 1",
-          [recipientWallet]
-        );
-        if (wHandleRes.rows && wHandleRes.rows.length > 0) {
-          recipientHandle = wHandleRes.rows[0].handle;
-        }
-      }
-    }
-
-    if (!recipientWallet) {
+    if (!handleDetails || !handleDetails.ownerWallet) {
       return {
-        replyText: `@${cleanHandle} hasn't registered a portfolio on TENDER yet. Tap the link in my bio to claim this handle and elect your stock mix.`,
+        replyText: `@${cleanHandle} hasn't registered a portfolio on TENDER Robinhood yet. Tap the link in my bio to claim this handle and elect your stock mix.`,
         recipientHandle: cleanHandle,
         recipientWallet: "",
         isRegistered: false,
       };
     }
 
-    const electionsRes = await query(
-      "SELECT asset_symbol, basis_points FROM handle_elections WHERE handle = $1 AND is_active = TRUE ORDER BY basis_points DESC",
-      [recipientHandle]
-    );
-
-    if (!electionsRes.rows || electionsRes.rows.length === 0) {
+    if (!handleDetails.elections || handleDetails.elections.length === 0) {
       return {
-        replyText: `@${recipientHandle} has no active portfolio elections set yet. Tap the link in my bio to set your allocation.`,
-        recipientHandle,
-        recipientWallet,
+        replyText: `@${handleDetails.handle} has no active portfolio elections set yet. Tap the link in my bio to set your allocation.`,
+        recipientHandle: handleDetails.handle,
+        recipientWallet: handleDetails.ownerWallet,
         isRegistered: true,
       };
     }
 
-    const allocStr = electionsRes.rows
-      .map((r: any) => `${Math.round(r.basis_points / 100)}% ${r.asset_symbol}`)
+    const allocStr = handleDetails.elections
+      .map((e) => `${Math.round(e.basisPoints / 100)}% ${e.symbol}`)
       .join(", ");
 
     return {
-      replyText: `@${recipientHandle}'s active receive-side portfolio: ${allocStr}. Settles atomically on Solana via Jupiter & Relay.`,
-      recipientHandle,
-      recipientWallet,
+      replyText: `@${handleDetails.handle}'s active receive-side portfolio: ${allocStr}. Settles atomically on Robinhood Chain via Uniswap V4.`,
+      recipientHandle: handleDetails.handle,
+      recipientWallet: handleDetails.ownerWallet,
       isRegistered: true,
     };
   }
 
   // 3. Invoice action
   if (intent.action === "invoice" && intent.target && intent.amount) {
-    const payerHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
-    const tokenSymbol = (intent.token || "USDC").toUpperCase();
-    const token = resolveSolanaToken(tokenSymbol);
-    const finalMint = token?.mint || "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-    const finalSymbol = token?.symbol || "USDC";
+    const payerHandle = intent.target.replace(/^@|^#/, "").toLowerCase().trim();
+    const tokenSymbol = (intent.token || "USDG").toUpperCase();
+    const token = resolveRobinhoodToken(tokenSymbol) || USDG;
 
-    // Lookup author in registry to be the recipient of the invoice funds
-    const cleanAuthor = authorHandle ? authorHandle.toLowerCase().replace(/^@/, "").trim() : "";
+    // Lookup author in Robinhood registry to receive invoice funds
+    const cleanAuthor = authorHandle ? authorHandle.toLowerCase().replace(/^@|^#/, "").trim() : "";
     let recipientHandle = cleanAuthor;
     let recipientWallet = "";
 
     if (cleanAuthor) {
-      const authorRes = await query(
-        "SELECT handle, owner_wallet FROM handles WHERE handle = $1 OR LOWER(x_username) = $1 LIMIT 1",
-        [cleanAuthor]
-      );
-      if (authorRes.rows && authorRes.rows.length > 0) {
-        recipientHandle = authorRes.rows[0].handle;
-        recipientWallet = authorRes.rows[0].owner_wallet;
+      const authorDetails = await getV2HandleDetails(cleanAuthor);
+      if (authorDetails) {
+        recipientHandle = authorDetails.handle;
+        recipientWallet = authorDetails.ownerWallet;
       }
     }
 
     if (!recipientWallet) {
       return {
-        replyText: `@${cleanAuthor || "there"} you haven't claimed your handle on TENDER yet to issue invoices. Tap the link in my bio to register.`,
+        replyText: `@${cleanAuthor || "there"} you haven't claimed your handle on TENDER Robinhood yet to issue invoices. Tap the link in my bio to register.`,
         recipientHandle: cleanAuthor,
         recipientWallet: "",
         isRegistered: false,
       };
     }
 
-    const invoiceId = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const invoiceId = `rh_inv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
     try {
       await query(
-        `INSERT INTO invoices (
-          id, recipient_handle, recipient_wallet, amount, token_mint, token_symbol, memo, status, expires_at, creator_wallet, creator_handle
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10)`,
+        `INSERT INTO v2_invoices (
+          id, recipient_handle, recipient_wallet, target_amount, target_token_symbol,
+          target_token_address, memo, status, expires_at, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, NOW())`,
         [
           invoiceId,
           recipientHandle,
           recipientWallet,
           intent.amount,
-          finalMint,
-          finalSymbol,
+          token.symbol,
+          token.address,
           intent.memo || null,
           expiresAt,
-          recipientWallet,
-          recipientHandle,
         ]
       );
     } catch (err: any) {
-      console.error("[Bot Routing] Error creating invoice from tweet:", err);
+      console.error("[Bot Routing] Error creating Robinhood invoice from tweet:", err);
     }
 
     const memoPart = intent.memo ? ` · Memo: ${intent.memo}` : "";
     return {
-      replyText: `Invoice recorded for @${payerHandle} (${intent.amount} ${finalSymbol}${memoPart}). Tap the link in my bio to view and pay.`,
+      replyText: `Invoice recorded for @${payerHandle} (${intent.amount} ${token.symbol}${memoPart}) on Robinhood Chain. Tap the link in my bio to view and pay.`,
       recipientHandle,
       recipientWallet,
       isRegistered: true,
     };
   }
 
-  // 3b. Send NFT action: Direct sovereign transfer, bypasses elections
+  // 3b. Send NFT action: Direct EVM transfer on Robinhood Chain
   if (intent.action === "send_nft" && intent.target && intent.memo) {
-    const cleanHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
-    const nftMint = intent.memo.trim();
+    const cleanHandle = intent.target.replace(/^@|^#/, "").toLowerCase().trim();
+    const nftContract = intent.memo.trim();
 
-    if (!isValidSolanaAddress(nftMint)) {
+    if (!isValidEvmAddress(nftContract)) {
       return {
-        replyText: `@${cleanHandle} Invalid NFT mint address '${nftMint}'. Please provide a valid 32-44 character Solana mint.`,
+        replyText: `@${cleanHandle} Invalid NFT contract address '${nftContract}'. Please provide a valid 42-character EVM address (0x...) on Robinhood Chain.`,
         recipientHandle: cleanHandle,
         recipientWallet: "",
         isRegistered: false,
       };
     }
 
-    let recipientHandle = cleanHandle;
-    let recipientWallet = "";
-
-    const handleRes = await query(
-      "SELECT handle, owner_wallet FROM handles WHERE LOWER(handle) = $1 OR LOWER(x_username) = $1 LIMIT 1",
-      [cleanHandle]
-    );
-
-    if (handleRes.rows && handleRes.rows.length > 0) {
-      recipientHandle = handleRes.rows[0].handle;
-      recipientWallet = handleRes.rows[0].owner_wallet;
-    } else {
-      const xAccRes = await query(
-        "SELECT wallet_address, x_username FROM x_accounts WHERE LOWER(x_username) = $1 LIMIT 1",
-        [cleanHandle]
-      );
-      if (xAccRes.rows && xAccRes.rows.length > 0) {
-        recipientWallet = xAccRes.rows[0].wallet_address;
-        const wHandleRes = await query(
-          "SELECT handle FROM handles WHERE owner_wallet = $1 LIMIT 1",
-          [recipientWallet]
-        );
-        if (wHandleRes.rows && wHandleRes.rows.length > 0) {
-          recipientHandle = wHandleRes.rows[0].handle;
-        }
-      }
-    }
-
-    if (!recipientWallet) {
+    const handleDetails = await getV2HandleDetails(cleanHandle);
+    if (!handleDetails || !handleDetails.ownerWallet) {
       return {
-        replyText: `@${cleanHandle} hasn't registered their tag on TENDER yet. Tap the link in my bio to claim this handle and receive NFTs.`,
+        replyText: `@${cleanHandle} hasn't registered their tag on TENDER Robinhood yet. Tap the link in my bio to claim this handle and receive NFTs.`,
         recipientHandle: cleanHandle,
         recipientWallet: "",
         isRegistered: false,
       };
     }
-
-    const nftMeta = await resolveNftMetadata(nftMint);
-    const nftName = nftMeta.name || `NFT (${nftMint.slice(0, 4)}…${nftMint.slice(-4)})`;
 
     if (tweetId) {
       try {
@@ -224,22 +167,22 @@ export async function routeBotIntent(params: {
           `INSERT INTO pending_settlements (
              source_ref, author_x_id, author_x_handle,
              recipient_handle, recipient_wallet,
-             input_token, input_amount, token_mint, asset_type, portfolio_summary, tweet_url, status
-           ) VALUES ($1, $2, $3, $4, $5, 'NFT', 1, $6, 'nft', $7, $8, 'pending')
+             input_token, input_amount, token_mint, asset_type, portfolio_summary, tweet_url, status,
+             chain, network_id
+           ) VALUES ($1, $2, $3, $4, $5, 'NFT', 1, $6, 'nft', $7, $8, 'pending', 'robinhood', 4663)
            ON CONFLICT (source_ref) DO NOTHING`,
           [
             tweetId,
             authorId || null,
             authorHandle || null,
-            recipientHandle,
-            recipientWallet,
-            nftMint,
+            handleDetails.handle,
+            handleDetails.ownerWallet,
+            nftContract,
             JSON.stringify([
               {
                 symbol: "NFT",
-                name: nftName,
-                mint: nftMint,
-                image: nftMeta.image,
+                name: `NFT (${nftContract.slice(0, 6)}…${nftContract.slice(-4)})`,
+                mint: nftContract,
                 percentage: 100,
                 allocatedAmount: "1",
                 isNft: true,
@@ -249,15 +192,15 @@ export async function routeBotIntent(params: {
           ]
         );
       } catch (dbErr) {
-        console.error("[Bot Service] Failed to save pending NFT settlement:", dbErr);
+        console.error("[Bot Service] Failed to save pending Robinhood NFT settlement:", dbErr);
       }
     }
 
-    const shortWallet = `${recipientWallet.slice(0, 4)}…${recipientWallet.slice(-4)}`;
+    const shortWallet = `${handleDetails.ownerWallet.slice(0, 6)}…${handleDetails.ownerWallet.slice(-4)}`;
     return {
-      replyText: `NFT transfer staged for @${recipientHandle}! 🖼️ Direct sovereign transfer of ${nftName} to @${recipientHandle} (${shortWallet}). Tap the link in my bio to review and sign in your dashboard.`,
-      recipientHandle,
-      recipientWallet,
+      replyText: `NFT transfer staged for @${handleDetails.handle}! 🖼️ Direct transfer of contract ${nftContract.slice(0, 6)}…${nftContract.slice(-4)} to @${handleDetails.handle} (${shortWallet}) on Robinhood Chain (4663). Tap the link in my bio to review and sign.`,
+      recipientHandle: handleDetails.handle,
+      recipientWallet: handleDetails.ownerWallet,
       isRegistered: true,
     };
   }
@@ -266,168 +209,136 @@ export async function routeBotIntent(params: {
   if (intent.action === "unrecognized" || !intent.target || !intent.amount) {
     return {
       replyText:
-        "Couldn't identify a payment recipient or amount. Try: '@TenderRWABot pay @handle 50 USDC', '@TenderRWABot quote 100 USDC for @handle', or '@TenderRWABot mix @handle'. Tap the link in my bio to open the terminal.",
+        "Couldn't identify a payment recipient or amount. Try: '@TenderRWABot pay @handle 50 USDG', '@TenderRWABot quote 100 USDG for @handle', or '@TenderRWABot mix @handle'. Tap the link in my bio to open the Robinhood terminal.",
       recipientHandle: "",
       recipientWallet: "",
       isRegistered: false,
     };
   }
 
-  const cleanHandle = intent.target.replace(/^@/, "").toLowerCase().trim();
-  const tokenSymbol = (intent.token || "USDC").toUpperCase();
-  const inToken = resolveSolanaToken(tokenSymbol);
+  // 5. Send / Quote Action on Robinhood Chain
+  const cleanHandle = intent.target.replace(/^@|^#/, "").toLowerCase().trim();
+  const tokenSymbol = (intent.token || "USDG").toUpperCase();
+  const inToken = resolveRobinhoodToken(tokenSymbol);
 
   if (!inToken) {
     return {
-      replyText: `Unsupported payment token '${tokenSymbol}'. TENDER accepts USDC or SOL on Solana. Tap the link in my bio for details.`,
+      replyText: `Unsupported payment token '${tokenSymbol}'. TENDER on Robinhood Chain accepts USDG, ETH, or tokenized equities (SPCX, NVDA, AAPL). Tap the link in my bio for details.`,
       recipientHandle: cleanHandle,
       recipientWallet: "",
       isRegistered: false,
     };
   }
 
-  // 3. Lookup handle in registry (by handle name or by linked X username)
-  let recipientHandle = cleanHandle;
-  let recipientWallet = "";
-
-  const handleRes = await query(
-    "SELECT handle, owner_wallet FROM handles WHERE handle = $1 OR LOWER(x_username) = $1 LIMIT 1",
-    [cleanHandle]
-  );
-
-  if (handleRes.rows && handleRes.rows.length > 0) {
-    recipientHandle = handleRes.rows[0].handle;
-    recipientWallet = handleRes.rows[0].owner_wallet;
-  } else {
-    // Check x_accounts directly
-    const xAccRes = await query(
-      "SELECT wallet_address, x_username FROM x_accounts WHERE LOWER(x_username) = $1 LIMIT 1",
-      [cleanHandle]
-    );
-    if (xAccRes.rows && xAccRes.rows.length > 0) {
-      recipientWallet = xAccRes.rows[0].wallet_address;
-      const wHandleRes = await query(
-        "SELECT handle FROM handles WHERE owner_wallet = $1 LIMIT 1",
-        [recipientWallet]
-      );
-      if (wHandleRes.rows && wHandleRes.rows.length > 0) {
-        recipientHandle = wHandleRes.rows[0].handle;
-      }
-    }
-  }
-
-  if (!recipientWallet) {
+  // Lookup Robinhood Tag Details
+  const handleDetails = await getV2HandleDetails(cleanHandle);
+  if (!handleDetails || !handleDetails.ownerWallet) {
     return {
-      replyText: `@${cleanHandle} hasn't registered a portfolio election on TENDER yet. Tap the link in my bio to claim this handle and choose your stock mix.`,
+      replyText: `@${cleanHandle} hasn't registered their portfolio on TENDER Robinhood yet. Tap the link in my bio to claim this tag and elect your receive-mix.`,
       recipientHandle: cleanHandle,
       recipientWallet: "",
       isRegistered: false,
     };
   }
 
-  // 4. Lookup active elections
-  const electionsRes = await query(
-    "SELECT asset_symbol, asset_mint, basis_points FROM handle_elections WHERE handle = $1 AND is_active = TRUE",
-    [cleanHandle]
-  );
+  const recipientHandle = handleDetails.handle;
+  const recipientWallet = handleDetails.ownerWallet;
 
-  if (!electionsRes.rows || electionsRes.rows.length === 0) {
-    return {
-      replyText: `@${cleanHandle} has no active portfolio elections set. Tap the link in my bio to update portfolio preferences.`,
-      recipientHandle: cleanHandle,
+  // Active elections on Robinhood Chain
+  const electionLegs: PortfolioElectionLeg[] =
+    handleDetails.elections && handleDetails.elections.length > 0
+      ? handleDetails.elections.map((e) => ({
+          symbol: e.symbol,
+          tokenAddress: e.tokenAddress,
+          basisPoints: e.basisPoints,
+          percentage: e.percentage,
+          token: e.token || resolveRobinhoodToken(e.symbol) || USDG,
+        }))
+      : [
+          {
+            symbol: "USDG",
+            tokenAddress: USDG.address,
+            basisPoints: 10000,
+            percentage: 100,
+            token: USDG,
+          },
+        ];
+
+  // Calculate Robinhood portfolio quotes via Uniswap V4
+  let portfolioResult;
+  try {
+    portfolioResult = await quotePortfolioSettlement({
+      userWallet: "0x0000000000000000000000000000000000000000",
       recipientWallet,
-      isRegistered: true,
-    };
+      recipientHandle,
+      fromToken: inToken,
+      totalAmountIn: intent.amount,
+      elections: electionLegs,
+    });
+  } catch (quoteErr: any) {
+    console.error("[Bot Service] Failed to calculate Robinhood portfolio quote:", quoteErr);
   }
 
-  const elections = electionsRes.rows.map((r: any) => ({
-    assetSymbol: r.asset_symbol,
-    assetMint: r.asset_mint,
-    basisPoints: r.basis_points,
+  const portfolioSummary = portfolioResult?.legs?.map((leg) => ({
+    symbol: leg.assetSymbol,
+    percentage: leg.percentage,
+    allocatedAmount: leg.quote?.amountOutFormatted || leg.allocatedInAmountFormatted,
+  })) || electionLegs.map((leg) => ({
+    symbol: leg.symbol,
+    percentage: leg.percentage,
+    allocatedAmount: ((intent.amount! * leg.basisPoints) / 10000).toString(),
   }));
 
-  const inDecimals = inToken.decimals;
-  const inAmountBig = BigInt(Math.round(intent.amount * 10 ** inDecimals));
+  const allocStr = portfolioSummary
+    .map((leg) => `${leg.percentage}% ${leg.symbol} (~${Number(leg.allocatedAmount).toFixed(2)})`)
+    .join(", ");
 
-  try {
-    const portfolioQuote = await calculatePortfolioElectionQuotes({
-      inputMint: inToken.mint,
-      totalAmountIn: inAmountBig.toString(),
-      elections,
-      recipientWallet,
-    });
-
-    const breakdownPills = portfolioQuote.legs.map((leg) => {
-      const pct = (leg.basisPoints / 100).toFixed(0);
-      return `${pct}% ${leg.assetSymbol}`;
-    });
-
-    const quoteOutputs = portfolioQuote.legs.map((leg) => {
-      const outAmt = parseFloat(leg.quote.outAmountFormatted || "0");
-      let displayAmt = "";
-      if (outAmt <= 0) {
-        displayAmt = `${(leg.basisPoints / 100).toFixed(0)}%`;
-      } else if (outAmt < 0.0001) {
-        displayAmt = `~${outAmt.toPrecision(2)}`;
-      } else if (outAmt < 1) {
-        displayAmt = `~${outAmt.toFixed(5).replace(/0+$/, "").replace(/\.$/, "")}`;
-      } else {
-        displayAmt = `~${outAmt.toFixed(2)}`;
-      }
-      return `${displayAmt} ${leg.assetSymbol}`;
-    });
-
-    const summaryList = portfolioQuote.legs.map((leg) => ({
-      symbol: leg.assetSymbol,
-      percentage: leg.basisPoints / 100,
-      allocatedAmount: leg.allocatedInAmountFormatted,
-    }));
-
-    // Save pending settlement row ONLY for payment actions (pay/send/tip), NEVER for quotes
-    if (tweetId && intent.action !== "quote") {
-      try {
-        await query(
-          `INSERT INTO pending_settlements (
-             source_ref, author_x_id, author_x_handle,
-             recipient_handle, recipient_wallet,
-             input_token, input_amount, portfolio_summary, tweet_url, status
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
-           ON CONFLICT (source_ref) DO NOTHING`,
-          [
-            tweetId,
-            authorId || null,
-            authorHandle || null,
-            cleanHandle,
-            recipientWallet,
-            inToken.symbol,
-            intent.amount,
-            JSON.stringify(summaryList),
-            `https://x.com/${authorHandle || "i"}/status/${tweetId}`,
-          ]
-        );
-      } catch (err) {
-        console.warn("Could not save pending settlement, continuing:", err);
-      }
-    }
-
-    const replyText =
-      intent.action === "quote"
-        ? `Quote for @${cleanHandle}: ${intent.amount} ${inToken.symbol} estimates into ${quoteOutputs.join(", ")}. Tap the link in my bio to open the terminal.`
-        : `Slicing ${intent.amount} ${inToken.symbol} for @${cleanHandle} into ${breakdownPills.join(", ")}. Tap the link in my bio to review and sign it in your dashboard.`;
-
+  // Handle quote command (read-only)
+  if (intent.action === "quote") {
     return {
-      replyText,
-      recipientHandle: cleanHandle,
+      replyText: `Quote for @${recipientHandle}: ${intent.amount} ${inToken.symbol} allocates to: ${allocStr} on Robinhood Chain via Uniswap V4. Tap the link in my bio to execute.`,
+      recipientHandle,
       recipientWallet,
       isRegistered: true,
-      portfolioSummary: summaryList,
-    };
-  } catch (err: any) {
-    return {
-      replyText: `Could not quote @${cleanHandle}'s election: ${err.message}. Tap the link in my bio to check portfolio assets.`,
-      recipientHandle: cleanHandle,
-      recipientWallet,
-      isRegistered: true,
+      portfolioSummary,
     };
   }
+
+  // Handle send / pay command (stages Robinhood pending settlement)
+  if (tweetId) {
+    try {
+      await query(
+        `INSERT INTO pending_settlements (
+           source_ref, author_x_id, author_x_handle,
+           recipient_handle, recipient_wallet,
+           input_token, input_amount, token_mint, asset_type, portfolio_summary, tweet_url, status,
+           chain, network_id
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', 'robinhood', 4663)
+         ON CONFLICT (source_ref) DO NOTHING`,
+        [
+          tweetId,
+          authorId || null,
+          authorHandle || null,
+          recipientHandle,
+          recipientWallet,
+          inToken.symbol,
+          intent.amount,
+          inToken.address,
+          inToken.assetType,
+          JSON.stringify(portfolioSummary),
+          tweetId ? `https://x.com/${authorHandle || "i"}/status/${tweetId}` : null,
+        ]
+      );
+    } catch (dbErr) {
+      console.error("[Bot Service] Failed to save Robinhood pending settlement:", dbErr);
+    }
+  }
+
+  return {
+    replyText: `Payment staged for @${recipientHandle}! ⚡ Settling ${intent.amount} ${inToken.symbol} into @${recipientHandle}'s portfolio (${allocStr}) on Robinhood Chain (4663). Tap the link in my bio to review and sign in your dashboard.`,
+    recipientHandle,
+    recipientWallet,
+    isRegistered: true,
+    portfolioSummary,
+  };
 }
