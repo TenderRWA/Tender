@@ -51,7 +51,7 @@ v2AssetsRouter.get("/:symbolOrAddress", (req: Request, res: Response) => {
   const token = resolveRobinhoodToken(symbolOrAddress);
 
   if (!token) {
-    res.status(404).json({ error: `Asset '${symbolOrAddress}' not found on Robinhood Chain (4663)` });
+    res.status(404).json({ error: `Asset '${symbolOrAddress}' not found` });
     return;
   }
 

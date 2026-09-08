@@ -72,9 +72,6 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
               <span className="font-mono text-xs font-bold uppercase tracking-wider text-red">
                 {isPayment ? "Settlement Order" : "Settlement Quote"}
               </span>
-              <span className="rounded bg-card2 px-1.5 py-0.5 font-mono text-[10px] text-secondary2">
-                Uniswap V4 Atomicity
-              </span>
             </div>
             <h4 className="font-display font-bold text-base text-ink mt-0.5">
               {card.amount} {card.token} → @{card.recipientHandle}
@@ -259,9 +256,8 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
     return (
       <div className="mt-3 rounded-2xl border border-hairline/90 bg-base p-4 sm:p-5 shadow-xs space-y-3">
         <div className="flex items-center justify-between border-b border-hairline/60 pb-2.5">
-          <span className="font-display font-bold text-sm text-ink">{card.title}</span>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted2">
-            Uniswap V4 Eligible
+          <span className="font-display font-bold text-sm text-ink">
+            {card.title.replace(/·?\s*Robinhood Chain\s*(\(4663\))?/gi, "").trim()}
           </span>
         </div>
 

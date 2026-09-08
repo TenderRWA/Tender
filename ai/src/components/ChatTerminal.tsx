@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { sendAiChat, ActionCardData } from "../lib/api";
 import ActionCardView from "./ActionCardView";
 import SuggestedPrompts from "./SuggestedPrompts";
+import MarkdownText from "./MarkdownText";
 import { ArrowUp } from "lucide-react";
 
 interface Message {
@@ -152,9 +153,7 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
                 </div>
 
                 {/* Text Content */}
-                <div className="whitespace-pre-line font-body font-normal">
-                  {msg.content}
-                </div>
+                <MarkdownText content={msg.content} isUser={isUser} />
 
                 {/* Optional Attached Action Card */}
                 {msg.actionCard && (
@@ -178,7 +177,7 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
                 <span className="w-1.5 h-1.5 rounded-full bg-red animate-bounce [animation-delay:0.4s]" />
               </div>
               <span className="text-xs font-mono text-secondary2">
-                Routing intent on Uniswap V4...
+                Routing intent...
               </span>
             </div>
           </div>
@@ -218,8 +217,7 @@ export default function ChatTerminal({ xUsername, wallet }: ChatTerminalProps) {
           </button>
         </div>
         <div className="flex items-center justify-between px-2 pt-1 text-[10px] font-mono text-muted2">
-          <span>Press Enter to send · Uniswap V4 Non-Custodial Delivery</span>
-          <span>Zero Escrow Custody</span>
+          <span>Press Enter to send</span>
         </div>
       </div>
     </div>

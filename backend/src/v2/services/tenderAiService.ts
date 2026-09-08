@@ -259,15 +259,15 @@ function buildRobinhoodContext(resolvedHandle?: V2HandleDetails | null): string 
     handleContext = `\nKnown Mentioned Handle Context:\n• Handle: @${resolvedHandle.handle}\n• Owner Wallet: ${resolvedHandle.ownerWallet}\n• Active Portfolio Elections: ${electionList || "100% USDG"}\n`;
   }
 
-  return `You are TenderAI, the autonomous settlement copilot and AI assistant for TENDER on Robinhood Chain (Chain ID: 4663).
+  return `You are TenderAI, the autonomous settlement copilot and AI assistant for TENDER.
 TENDER is a non-custodial receive-side portfolio settlement rail.
-How it works on Robinhood Chain:
+How it works:
 - Senders pay using working currencies (USDG or ETH).
 - The protocol routes and converts the payment via Uniswap V4 pools into the recipient's pre-configured stock and crypto election mix.
 - Settled tokens land directly in the recipient's personal EVM wallet with ZERO intermediate escrow custody.
 - Direct NFT transfers are also supported to registered handles or raw EVM addresses.
 
-Supported Verified Tokens on Robinhood Chain (Chain 4663):
+Supported Verified Tokens:
 • ETH (Native Gas, 18 decimals)
 • USDG (Global Dollar Stablecoin, address: ${USDG.address}, 6 decimals)
 ${assetSummary}
@@ -403,11 +403,11 @@ export async function processTenderAiChat(params: {
   if (finalIntent.action === "asset_info") {
     const list = FEATURED_ROBINHOOD_ASSETS.map((a) => a.symbol).join(", ");
     if (!aiReply) {
-      aiReply = `Robinhood Chain (Chain 4663) supports native ETH, USDG stablecoin, and tokenized equities (${list}) with atomic Uniswap V4 settlement routing.`;
+      aiReply = `TENDER supports native ETH, USDG stablecoin, and tokenized equities (${list}) with instant portfolio settlement.`;
     }
     actionCard = {
       type: "assets",
-      title: "Eligible Asset Universe · Robinhood Chain (4663)",
+      title: "Eligible Asset Universe",
       meta: {
         assets: FEATURED_ROBINHOOD_ASSETS,
         chainId: ROBINHOOD_CHAIN_ID,
@@ -420,16 +420,16 @@ export async function processTenderAiChat(params: {
   if (finalIntent.action === "help") {
     if (!aiReply) {
       aiReply =
-        "I am TenderAI, your autonomous settlement copilot on Robinhood Chain (4663). You can tell me to:\n" +
+        "I am TenderAI, your autonomous settlement copilot. You can tell me to:\n" +
         "• 'Pay @timbook 0.002 ETH'\n" +
         "• 'What's the mix for @timbook?'\n" +
         "• 'Quote 50 USDG for @helen2swift'\n" +
         "• 'Send NFT 0x... to @timbook'\n" +
-        "• 'What tokens are supported on Robinhood?'";
+        "• 'What tokens are supported?'";
     }
     actionCard = {
       type: "info",
-      title: "TenderAI Capabilities · Robinhood Terminal",
+      title: "TenderAI Capabilities · Terminal",
       meta: {
         commands: [
           "Pay @timbook 0.002 ETH",

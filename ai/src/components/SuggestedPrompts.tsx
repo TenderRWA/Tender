@@ -10,7 +10,7 @@ const DEFAULT_PROMPTS = [
   "Pay @timbook 0.002 ETH",
   "What is @timbook's mix?",
   "Quote 100 USDG for @helen2swift",
-  "What assets are on Robinhood Chain?",
+  "What assets can I elect?",
   "Send NFT 0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa to @timbook",
 ];
 
