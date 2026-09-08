@@ -5,12 +5,15 @@ import { robinhoodChain } from "./chains";
 export const wagmiConfig = createConfig({
   chains: [robinhoodChain],
   connectors: [
-    injected({
-      target: "metaMask",
-    }),
-    injected(),
+    injected({ shimDisconnect: true }),
   ],
   transports: {
     [robinhoodChain.id]: http("https://rpc.mainnet.chain.robinhood.com"),
   },
 });
+
+declare module "wagmi" {
+  interface Register {
+    config: typeof wagmiConfig;
+  }
+}

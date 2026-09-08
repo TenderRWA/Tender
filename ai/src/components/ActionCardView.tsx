@@ -35,15 +35,78 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
     setErrorMsg(null);
 
     try {
-      // If payment token is ETH, we can send transaction directly to the recipient wallet or router
       if (card.token === "ETH" && card.amount) {
-        const hash = await sendTransactionAsync({
-          to: card.recipientWallet as `0x${string}`,
-          value: parseEther(card.amount.toString()),
-        });
-        setTxHash(hash);
+        const hexChainId = "0x1237"; // 4663 in hex
+        const valueWei = parseEther(card.amount.toString());
+        let txSubmitted = false;
+
+        // 1. Try Wagmi sendTransactionAsync first if connector is active
+        try {
+          const hash = await sendTransactionAsync({
+            to: card.recipientWallet as `0x${string}`,
+            value: valueWei,
+            chainId: 4663,
+          });
+          if (hash) {
+            setTxHash(hash);
+            txSubmitted = true;
+          }
+        } catch (wagmiErr: any) {
+          console.warn("[ActionCard] Wagmi sendTransactionAsync error, attempting EIP-1193 fallback:", wagmiErr);
+        }
+
+        // 2. Direct EIP-1193 fallback (works natively with Rainbow, MetaMask, Rabby, Coinbase)
+        if (!txSubmitted && typeof window !== "undefined" && (window as any).ethereum) {
+          const ethereum = (window as any).ethereum;
+
+          // Request chain switch to Robinhood Chain if needed
+          try {
+            await ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: hexChainId }],
+            });
+          } catch (switchErr: any) {
+            if (switchErr?.code === 4902 || switchErr?.message?.includes("Unrecognized chain")) {
+              await ethereum.request({
+                method: "wallet_addEthereumChain",
+                params: [
+                  {
+                    chainId: hexChainId,
+                    chainName: "Robinhood Chain",
+                    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+                    rpcUrls: ["https://rpc.mainnet.chain.robinhood.com"],
+                    blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
+                  },
+                ],
+              });
+            }
+          }
+
+          const accounts = await ethereum.request({ method: "eth_accounts" });
+          const fromAddr = userWallet || accounts?.[0];
+
+          const hash = await ethereum.request({
+            method: "eth_sendTransaction",
+            params: [
+              {
+                from: fromAddr,
+                to: card.recipientWallet,
+                value: `0x${valueWei.toString(16)}`,
+              },
+            ],
+          });
+
+          if (hash) {
+            setTxHash(hash);
+            txSubmitted = true;
+          }
+        }
+
+        if (!txSubmitted) {
+          throw new Error("Unable to trigger transaction signing. Please unlock your wallet and try again.");
+        }
       } else {
-        // Redirect to main terminal for multi-leg Uniswap V4 router execution
+        // Redirect to main terminal for multi-leg execution
         const targetUrl = `${mainAppUrl}/dashboard/payments?handle=${encodeURIComponent(
           card.recipientHandle || "",
         )}&amount=${card.amount}&token=${card.token}`;
