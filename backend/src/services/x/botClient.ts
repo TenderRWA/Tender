@@ -56,33 +56,78 @@ export async function listNewMentions(params: {
   maxResults?: number;
 }): Promise<XMention[]> {
   const botUser = await getBotUser();
-  const queryParams = new URLSearchParams({
-    max_results: String(params.maxResults ?? 20),
-    "tweet.fields": "author_id,conversation_id,created_at",
-    expansions: "author_id",
-    "user.fields": "username",
-  });
-
-  if (params.sinceId) {
-    queryParams.set("since_id", params.sinceId);
-  }
-
-  const body = await authedFetch(`/users/${botUser.id}/mentions?${queryParams}`);
-  const tweets = (body.data ?? []) as Array<{
+  const rawTweets: Array<{
     id: string;
     text: string;
     author_id: string;
     conversation_id: string;
-  }>;
-
+  }> = [];
   const users = new Map<string, string>();
-  if (body.includes?.users) {
-    for (const u of body.includes.users) {
-      users.set(u.id, u.username);
+
+  // 1. Real-time recent search (instant indexing for @mentions on Twitter API v2)
+  try {
+    const searchParams = new URLSearchParams({
+      query: `@${botUser.username}`,
+      max_results: String(Math.max(params.maxResults ?? 20, 10)),
+      "tweet.fields": "author_id,conversation_id,created_at",
+      expansions: "author_id",
+      "user.fields": "username",
+    });
+
+    if (params.sinceId) {
+      searchParams.set("since_id", params.sinceId);
+    }
+
+    const searchBody = await authedFetch(`/tweets/search/recent?${searchParams}`);
+    if (searchBody.data && Array.isArray(searchBody.data)) {
+      rawTweets.push(...searchBody.data);
+    }
+    if (searchBody.includes?.users) {
+      for (const u of searchBody.includes.users) {
+        users.set(u.id, u.username);
+      }
+    }
+  } catch (searchErr: any) {
+    console.warn("[X Bot] Recent search failed, falling back to /mentions:", searchErr.message);
+  }
+
+  // 2. Fallback to /users/:id/mentions timeline if search returned no results
+  if (rawTweets.length === 0) {
+    try {
+      const queryParams = new URLSearchParams({
+        max_results: String(params.maxResults ?? 20),
+        "tweet.fields": "author_id,conversation_id,created_at",
+        expansions: "author_id",
+        "user.fields": "username",
+      });
+
+      if (params.sinceId) {
+        queryParams.set("since_id", params.sinceId);
+      }
+
+      const body = await authedFetch(`/users/${botUser.id}/mentions?${queryParams}`);
+      if (body.data && Array.isArray(body.data)) {
+        rawTweets.push(...body.data);
+      }
+      if (body.includes?.users) {
+        for (const u of body.includes.users) {
+          users.set(u.id, u.username);
+        }
+      }
+    } catch (mentionsErr: any) {
+      console.warn("[X Bot] /mentions timeline failed:", mentionsErr.message);
     }
   }
 
-  return tweets.map((t) => ({
+  // Deduplicate mentions by tweet ID
+  const seen = new Set<string>();
+  const uniqueTweets = rawTweets.filter((t) => {
+    if (seen.has(t.id)) return false;
+    seen.add(t.id);
+    return true;
+  });
+
+  return uniqueTweets.map((t) => ({
     id: t.id,
     text: t.text,
     authorId: t.author_id,
