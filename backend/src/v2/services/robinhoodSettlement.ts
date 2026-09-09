@@ -7,6 +7,7 @@ import {
   resolveRobinhoodToken,
   isValidEvmAddress,
 } from "../lib/robinhoodTokens";
+import { planV4Swap, UNIVERSAL_ROUTER } from "./uniswapV4";
 
 export const PROTOCOL_FEE_BPS = 15; // 0.15% protocol fee
 
@@ -30,7 +31,7 @@ export interface SingleSwapQuoteResult {
   priceImpactPct: number;
   timeEstimate: number;
   requestId?: string;
-  executionVenue: "same_asset" | "relay_solver" | "uniswap_v4";
+  executionVenue: "same_asset" | "uniswap_v4";
   steps?: any[];
   rawRelayQuote?: any;
 }
@@ -64,136 +65,7 @@ export interface PortfolioSettlementQuoteResult {
 }
 
 /**
- * Fetch swap quote from Relay.link for Robinhood Chain (Chain 4663)
- */
-export async function fetchRelayRobinhoodQuote(params: {
-  user: string;
-  originCurrency: string;
-  destinationCurrency: string;
-  amount: string;
-  recipient?: string;
-}): Promise<any> {
-  const body: Record<string, any> = {
-    user: params.user,
-    originChainId: ROBINHOOD_CHAIN_ID,
-    destinationChainId: ROBINHOOD_CHAIN_ID,
-    originCurrency: params.originCurrency,
-    destinationCurrency: params.destinationCurrency,
-    amount: params.amount,
-    recipient: params.recipient || params.user,
-    tradeType: "EXACT_INPUT",
-  };
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (process.env.RELAY_API_KEY) {
-    headers["x-api-key"] = process.env.RELAY_API_KEY;
-  }
-
-  const res = await fetch("https://api.relay.link/quote/v2", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Relay Robinhood quote failed (${res.status}): ${errorText}`);
-  }
-
-  return await res.json();
-}
-
-/**
- * Deterministic fallback quote provider for Uniswap V4 on Robinhood Chain
- * when Relay is unreachable, offline, or during test suites.
- */
-function getSimulatedUniswapV4Quote(
-  fromToken: RobinhoodTokenInfo,
-  toToken: RobinhoodTokenInfo,
-  amountIn: number,
-  recipient: `0x${string}`
-): SingleSwapQuoteResult {
-  // Approximate standard pricing ratios
-  const pricesInUsd: Record<string, number> = {
-    USDG: 1.0,
-    ETH: 2600.0,
-    WETH: 2600.0,
-    SPCX: 185.0, // SpaceX
-    AAPL: 230.0,
-    NVDA: 120.0,
-    TSLA: 215.0,
-    GOOGL: 165.0,
-    AMZN: 185.0,
-    MSFT: 420.0,
-    META: 510.0,
-    COIN: 220.0,
-    PLTR: 32.0,
-  };
-
-  const fromPrice = pricesInUsd[fromToken.symbol.toUpperCase()] || 1.0;
-  const toPrice = pricesInUsd[toToken.symbol.toUpperCase()] || 1.0;
-
-  const inUsd = amountIn * fromPrice;
-  const outUnits = inUsd / toPrice;
-
-  const inBaseUnits = parseUnits(amountIn.toString(), fromToken.decimals).toString();
-  const outBaseUnits = parseUnits(outUnits.toFixed(Math.min(toToken.decimals, 8)), toToken.decimals).toString();
-  const rate = (outUnits / amountIn).toFixed(6);
-
-  const isNative = fromToken.isNative || fromToken.address === "0x0000000000000000000000000000000000000000";
-
-  const itemData = isNative
-    ? {
-        to: recipient,
-        data: "0x" as `0x${string}`,
-        value: inBaseUnits,
-        chainId: ROBINHOOD_CHAIN_ID,
-      }
-    : {
-        to: fromToken.address,
-        data: encodeFunctionData({
-          abi: erc20Abi,
-          functionName: "transfer",
-          args: [recipient, BigInt(inBaseUnits)],
-        }),
-        value: "0",
-        chainId: ROBINHOOD_CHAIN_ID,
-      };
-
-  const steps = [
-    {
-      id: "uniswap_v4_swap",
-      action: `Swap ${fromToken.symbol} for ${toToken.symbol}`,
-      description: `Execute swap via Uniswap V4 pools on Robinhood Chain`,
-      kind: "transaction",
-      items: [
-        {
-          status: "not_started",
-          data: itemData,
-        },
-      ],
-    },
-  ];
-
-  return {
-    fromToken,
-    toToken,
-    amountIn: inBaseUnits,
-    amountInFormatted: amountIn.toString(),
-    amountOut: outBaseUnits,
-    amountOutFormatted: outUnits.toFixed(6),
-    rate,
-    priceImpactPct: 0.12,
-    timeEstimate: 2,
-    executionVenue: "uniswap_v4",
-    steps,
-  };
-}
-
-/**
- * Quote a single token-to-token swap on Robinhood Chain
+ * Quote a single token-to-token swap using Uniswap V4 on Robinhood Chain
  */
 export async function quoteSingleSwap(params: SingleSwapQuoteParams): Promise<SingleSwapQuoteResult> {
   const inBaseUnits = parseUnits(params.amountIn.toString(), params.fromToken.decimals).toString();
@@ -259,10 +131,74 @@ export async function quoteSingleSwap(params: SingleSwapQuoteParams): Promise<Si
     };
   }
 
-  // 2. Uniswap V4 Execution on Robinhood Chain (Chain 4663)
-  // Relay solvers only support ETH <-> USDG on 4663; all tokenized equities (SPCX, NVDA, AAPL, etc.)
-  // trade natively and exclusively through Uniswap V4 pools on Robinhood Chain.
-  return getSimulatedUniswapV4Quote(params.fromToken, params.toToken, params.amountIn, recipient);
+  // 2. Pure Uniswap V4 Execution on Robinhood Chain (Chain 4663)
+  const v4Plan = await planV4Swap({
+    fromToken: params.fromToken,
+    toToken: params.toToken,
+    amountIn: params.amountIn,
+    userWallet: params.userWallet,
+    slippageBps: params.slippageBps || 50,
+  });
+
+  if (v4Plan) {
+    const steps: any[] = [];
+
+    // Add token approval steps if required (Permit2 / Universal Router for ERC20 inputs)
+    if (v4Plan.approvals && v4Plan.approvals.length > 0) {
+      steps.push({
+        id: "approve",
+        action: `Approve ${params.fromToken.symbol}`,
+        description: `Approve ${params.fromToken.symbol} for Universal Router execution`,
+        kind: "transaction",
+        items: v4Plan.approvals.map((tx) => ({
+          status: "not_started",
+          data: {
+            to: tx.to,
+            data: tx.data,
+            value: tx.value,
+            chainId: ROBINHOOD_CHAIN_ID,
+          },
+        })),
+      });
+    }
+
+    // Add Universal Router V4 Swap transaction
+    steps.push({
+      id: "uniswap_v4_swap",
+      action: `Swap ${params.fromToken.symbol} for ${params.toToken.symbol}`,
+      description: `Execute swap via Uniswap V4 Universal Router (${v4Plan.route})`,
+      kind: "transaction",
+      items: [
+        {
+          status: "not_started",
+          data: {
+            to: v4Plan.swap.to,
+            data: v4Plan.swap.data,
+            value: v4Plan.swap.value,
+            chainId: ROBINHOOD_CHAIN_ID,
+          },
+        },
+      ],
+    });
+
+    const rate = (parseFloat(v4Plan.amountOutFormatted) / params.amountIn).toFixed(6);
+
+    return {
+      fromToken: params.fromToken,
+      toToken: params.toToken,
+      amountIn: v4Plan.amountIn.toString(),
+      amountInFormatted: v4Plan.amountInFormatted,
+      amountOut: v4Plan.amountOut.toString(),
+      amountOutFormatted: v4Plan.amountOutFormatted,
+      rate,
+      priceImpactPct: 0.12,
+      timeEstimate: 2,
+      executionVenue: "uniswap_v4",
+      steps,
+    };
+  }
+
+  throw new Error(`Uniswap V4 pool route unavailable for ${params.fromToken.symbol} -> ${params.toToken.symbol}`);
 }
 
 /**
@@ -293,7 +229,7 @@ export async function quotePortfolioSettlement(params: {
           },
         ];
 
-  // Quote every elected leg concurrently
+  // Quote every elected leg concurrently using Uniswap V4
   const legPromises = targetElections.map(async (election) => {
     const legShare = (params.totalAmountIn * election.basisPoints) / 10000;
     const legInBaseUnits = parseUnits(legShare.toString(), params.fromToken.decimals).toString();
@@ -323,7 +259,7 @@ export async function quotePortfolioSettlement(params: {
           slippageBps: 50,
         });
       }
-    } catch {
+    } catch (err) {
       // Safe-settle in USDG if an individual leg route fails
       isFallbackUsdg = true;
       legQuote = await quoteSingleSwap({

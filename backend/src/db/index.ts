@@ -4,6 +4,8 @@ const { Pool } = pg;
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || undefined,
+  connectionTimeoutMillis: 3000,
+  idleTimeoutMillis: 10000,
   ssl:
     process.env.DATABASE_URL && (process.env.DATABASE_URL.includes("supabase.com") || process.env.NODE_ENV === "production")
       ? { rejectUnauthorized: false }

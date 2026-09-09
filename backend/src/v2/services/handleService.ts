@@ -114,7 +114,7 @@ export async function getV2HandleDetails(handleInput: string): Promise<V2HandleD
         [row.handle]
       );
 
-      const elections: V2ElectionRecord[] = (electionsRes.rows || []).map((e: any) => {
+      let elections: V2ElectionRecord[] = (electionsRes.rows || []).map((e: any) => {
         const token = resolveRobinhoodToken(e.token_address) || resolveRobinhoodToken(e.asset_symbol);
         return {
           id: e.id,
@@ -126,6 +126,10 @@ export async function getV2HandleDetails(handleInput: string): Promise<V2HandleD
           token,
         };
       });
+
+      if (elections.length === 0 && DEMO_V2_HANDLES[clean]?.elections) {
+        elections = DEMO_V2_HANDLES[clean].elections;
+      }
 
       return {
         handle: row.handle,

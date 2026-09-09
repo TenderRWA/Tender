@@ -56,6 +56,16 @@ v2InvoicesRouter.post("/", async (req: Request, res: Response) => {
 
     const cleanCreatorHandle = creatorHandle ? creatorHandle.replace(/^@|^#/, "").toLowerCase() : null;
 
+    if (finalHandle) {
+      const handleCheck = await query("SELECT handle FROM v2_handles WHERE LOWER(handle) = $1", [finalHandle]);
+      if (!handleCheck.rows || handleCheck.rows.length === 0) {
+        await query(
+          "INSERT INTO v2_handles (handle, owner_wallet, x_handle) VALUES ($1, $2, $3) ON CONFLICT (handle) DO NOTHING",
+          [finalHandle, finalWallet, finalHandle]
+        ).catch(() => null);
+      }
+    }
+
     const insertRes = await query(
       `INSERT INTO v2_invoices (
          id, recipient_handle, recipient_wallet, target_amount, target_token_symbol,

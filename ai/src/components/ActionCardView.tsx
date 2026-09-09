@@ -35,31 +35,39 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
     setErrorMsg(null);
 
     try {
-      if (card.token === "ETH" && card.amount) {
-        const hexChainId = "0x1237"; // 4663 in hex
-        const valueWei = parseEther(card.amount.toString());
-        let txSubmitted = false;
+      const hexChainId = "0x1237"; // 4663 in hex
 
-        // 1. Try Wagmi sendTransactionAsync first if connector is active
-        try {
-          const hash = await sendTransactionAsync({
-            to: card.recipientWallet as `0x${string}`,
-            value: valueWei,
-            chainId: 4663,
-          });
-          if (hash) {
-            setTxHash(hash);
-            txSubmitted = true;
+      // Extract executable Uniswap V4 steps from quote legs or card meta
+      const quoteLegs = card.meta?.quote?.legs || [];
+      const executableSteps: Array<{
+        to: string;
+        data?: string;
+        value?: string;
+        symbol?: string;
+      }> = [];
+
+      for (const leg of quoteLegs) {
+        const steps = leg.quote?.steps || [];
+        for (const s of steps) {
+          for (const it of s.items || []) {
+            if (it.data && (it.data.data || it.data.value)) {
+              executableSteps.push({
+                to: it.data.to,
+                data: it.data.data,
+                value: it.data.value,
+                symbol: leg.assetSymbol,
+              });
+            }
           }
-        } catch (wagmiErr: any) {
-          console.warn("[ActionCard] Wagmi sendTransactionAsync error, attempting EIP-1193 fallback:", wagmiErr);
         }
+      }
 
-        // 2. Direct EIP-1193 fallback (works natively with Rainbow, MetaMask, Rabby, Coinbase)
-        if (!txSubmitted && typeof window !== "undefined" && (window as any).ethereum) {
+      let lastHash = "";
+
+      if (executableSteps.length > 0) {
+        // 1. Ensure user is on Robinhood Chain
+        if (typeof window !== "undefined" && (window as any).ethereum) {
           const ethereum = (window as any).ethereum;
-
-          // Request chain switch to Robinhood Chain if needed
           try {
             await ethereum.request({
               method: "wallet_switchEthereumChain",
@@ -81,7 +89,80 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
               });
             }
           }
+        }
 
+        // 2. Execute each Uniswap V4 transaction sequentially
+        for (let i = 0; i < executableSteps.length; i++) {
+          const step = executableSteps[i];
+          if (i > 0) await new Promise((r) => setTimeout(r, 600));
+
+          let stepSubmitted = false;
+
+          // Try Wagmi first
+          try {
+            const hash = await sendTransactionAsync({
+              to: step.to as `0x${string}`,
+              data: (step.data as `0x${string}`) || undefined,
+              value: step.value ? BigInt(step.value) : 0n,
+              chainId: 4663,
+            });
+            if (hash) {
+              lastHash = hash;
+              stepSubmitted = true;
+            }
+          } catch (wagmiErr: any) {
+            console.warn("[ActionCard] Wagmi send error, attempting EIP-1193 fallback:", wagmiErr);
+          }
+
+          // Direct EIP-1193 fallback
+          if (!stepSubmitted && typeof window !== "undefined" && (window as any).ethereum) {
+            const ethereum = (window as any).ethereum;
+            const accounts = await ethereum.request({ method: "eth_accounts" });
+            const fromAddr = userWallet || accounts?.[0];
+
+            const txParams: Record<string, any> = {
+              from: fromAddr,
+              to: step.to,
+            };
+            if (step.data) txParams.data = step.data;
+            if (step.value) txParams.value = `0x${BigInt(step.value).toString(16)}`;
+
+            const hash = await ethereum.request({
+              method: "eth_sendTransaction",
+              params: [txParams],
+            });
+
+            if (hash) {
+              lastHash = hash;
+              stepSubmitted = true;
+            }
+          }
+
+          if (!stepSubmitted) {
+            throw new Error(`Failed to submit Uniswap V4 transaction for ${step.symbol || "swap"}.`);
+          }
+        }
+      } else if (card.token === "ETH" && card.amount) {
+        // Fallback for direct transfers if no routing steps
+        const valueWei = parseEther(card.amount.toString());
+        let txSubmitted = false;
+
+        try {
+          const hash = await sendTransactionAsync({
+            to: card.recipientWallet as `0x${string}`,
+            value: valueWei,
+            chainId: 4663,
+          });
+          if (hash) {
+            lastHash = hash;
+            txSubmitted = true;
+          }
+        } catch (wagmiErr: any) {
+          console.warn("[ActionCard] Wagmi send error, attempting EIP-1193 fallback:", wagmiErr);
+        }
+
+        if (!txSubmitted && typeof window !== "undefined" && (window as any).ethereum) {
+          const ethereum = (window as any).ethereum;
           const accounts = await ethereum.request({ method: "eth_accounts" });
           const fromAddr = userWallet || accounts?.[0];
 
@@ -97,7 +178,7 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
           });
 
           if (hash) {
-            setTxHash(hash);
+            lastHash = hash;
             txSubmitted = true;
           }
         }
@@ -106,11 +187,33 @@ export default function ActionCardView({ card, userWallet }: ActionCardViewProps
           throw new Error("Unable to trigger transaction signing. Please unlock your wallet and try again.");
         }
       } else {
-        // Redirect to main terminal for multi-leg execution
         const targetUrl = `${mainAppUrl}/dashboard/payments?handle=${encodeURIComponent(
           card.recipientHandle || "",
         )}&amount=${card.amount}&token=${card.token}`;
         window.open(targetUrl, "_blank");
+        return;
+      }
+
+      if (lastHash) {
+        setTxHash(lastHash);
+        // Record confirmed settlement in backend
+        try {
+          const rawApi = (import.meta.env.VITE_API_URL || "").trim();
+          const apiBase = (rawApi.startsWith("http") ? rawApi : "https://api.tenderrwa.com").replace(/\/+$/, "");
+          await fetch(`${apiBase}/api/v2/settle/confirm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              txHash: lastHash,
+              senderWallet: userWallet || "0x0000000000000000000000000000000000000000",
+              recipientHandle: card.recipientHandle,
+              recipientWallet: card.recipientWallet,
+              inputTokenSymbol: card.token || "ETH",
+              inputAmount: card.amount,
+              outputBreakdown: card.legs?.map((l) => ({ symbol: l.symbol, amount: l.allocatedAmount })),
+            }),
+          }).catch(() => null);
+        } catch {}
       }
     } catch (err: any) {
       console.error("[ActionCard] Transaction execution failed:", err);
